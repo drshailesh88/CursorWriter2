@@ -345,9 +345,13 @@ function ThreePanelContent() {
 
     try {
       if (format === 'pptx') {
-        const { exportToPptx } = await import('@/lib/presentations/export/pptx-export');
-        const blob = await exportToPptx(currentPresentation);
-        downloadBlob(blob, `${currentPresentation.title}.pptx`);
+        // TODO: PPTX export temporarily disabled due to Node.js module compatibility
+        // Need to move to server-side API route
+        toast.error('PPTX export temporarily unavailable. Use PDF export instead.');
+        return;
+        // const { exportToPptx } = await import('@/lib/presentations/export/pptx-export');
+        // const blob = await exportToPptx(currentPresentation);
+        // downloadBlob(blob, `${currentPresentation.title}.pptx`);
       } else {
         const { exportToPdf } = await import('@/lib/presentations/export/pdf-export');
         const blob = await exportToPdf(currentPresentation);

@@ -64,12 +64,9 @@
  * PDF export works out of the box with jspdf.
  */
 
-// PPTX Export
-export {
-  exportToPptx,
-  exportAndDownloadPptx,
-  type PptxExportOptions,
-} from './pptx-export';
+// PPTX Export - Lazy loaded to avoid bundling Node.js dependencies in client
+// Use dynamic import: const { exportToPptx } = await import('@/lib/presentations/export/pptx-export');
+export type { PptxExportOptions } from './pptx-export';
 
 // PDF Export
 export {
