@@ -46,9 +46,9 @@ class KnowledgeMapBuilder {
       authors: p.authors,
       year: p.year,
       citationCount: p.citationCount,
-      referenceCount: p.referenceCount,
       abstract: p.abstract || '',
-      sources: p.sources as any,
+      source: 'semantic-scholar',
+      url: `https://example.com/${p.id}`,
       normalizedTitle: p.title.toLowerCase(),
       openAccess: p.openAccess,
       keywords: [],
@@ -108,8 +108,8 @@ class KnowledgeMapBuilder {
       papers: mapPapers,
       connections,
       config,
-      createdAt: MockTimestamp.now(),
-      updatedAt: MockTimestamp.now(),
+      createdAt: MockTimestamp.mockNow().toDate(),
+      updatedAt: MockTimestamp.mockNow().toDate(),
     };
   }
 
@@ -123,9 +123,9 @@ class KnowledgeMapBuilder {
       authors: p.authors,
       year: p.year,
       citationCount: p.citationCount,
-      referenceCount: p.referenceCount,
       abstract: p.abstract || '',
-      sources: p.sources as any,
+      source: 'semantic-scholar',
+      url: `https://example.com/${p.id}`,
       normalizedTitle: p.title.toLowerCase(),
       openAccess: p.openAccess,
     }));
@@ -478,8 +478,8 @@ describe('KnowledgeMapBuilder', () => {
         papers: [],
         connections: [],
         config: mockConfig,
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.mockNow().toDate(),
+        updatedAt: MockTimestamp.mockNow().toDate(),
       };
 
       const gaps = await builder.detectGaps(mockMap);
@@ -512,8 +512,8 @@ describe('KnowledgeMapBuilder', () => {
         papers: [],
         connections: [],
         config: mockConfig,
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.mockNow().toDate(),
+        updatedAt: MockTimestamp.mockNow().toDate(),
       };
 
       const gaps = await builder.detectGaps(mockMap);
@@ -558,8 +558,8 @@ describe('KnowledgeMapBuilder', () => {
         papers: [],
         connections: [],
         config: mockConfig,
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.mockNow().toDate(),
+        updatedAt: MockTimestamp.mockNow().toDate(),
       };
 
       const gaps = await builder.detectGaps(mockMap);

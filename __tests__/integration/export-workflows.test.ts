@@ -247,8 +247,8 @@ const createTestPresentation = (overrides: Partial<Presentation> = {}): Presenta
     transition: 'fade',
     transitionDuration: 300,
   },
-  createdAt: MockTimestamp.fromDate(new Date('2024-01-01')),
-  updatedAt: MockTimestamp.fromDate(new Date('2024-01-02')),
+  createdAt: MockTimestamp.fromDate(new Date('2024-01-01')).toDate(),
+  updatedAt: MockTimestamp.fromDate(new Date('2024-01-02')).toDate(),
   ...overrides,
 });
 

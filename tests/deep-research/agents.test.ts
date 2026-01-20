@@ -72,14 +72,14 @@ const createMockSession = (topic: string = 'Effects of caffeine on cognitive per
     qualityScore: 0,
     reviewFeedback: [],
     revisionCount: 0,
-    generatedAt: MockTimestamp.now(),
+    generatedAt: MockTimestamp.mockNow().toDate(),
   },
   status: 'clarifying',
   progress: 0,
-  createdAt: MockTimestamp.now(),
-  updatedAt: MockTimestamp.now(),
   collaborators: [],
   comments: [],
+  createdAt: MockTimestamp.mockNow().toDate(),
+  updatedAt: MockTimestamp.mockNow().toDate(),
 });
 
 const createMockSource = (id: string, title: string, year: number): ResearchSource => ({
@@ -108,7 +108,7 @@ const createMockSource = (id: string, title: string, year: number): ResearchSour
   citationContext: '',
   citationCount: 50,
   influenceScore: 0.8,
-  processedAt: MockTimestamp.now(),
+  processedAt: MockTimestamp.mockNow().toDate(),
 });
 
 const createMockContext = (session: ResearchSession): AgentContext => ({

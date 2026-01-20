@@ -34,9 +34,9 @@ vi.mock('@/lib/research/semantic-scholar', () => ({
         authors: [{ name: 'John Doe' }],
         year: 2023,
         citationCount: 50,
-        referenceCount: 30,
         abstract: 'Test abstract',
-        sources: ['semanticscholar'],
+        source: 'semantic-scholar',
+        url: 'https://semanticscholar.org/paper123',
         normalizedTitle: 'test paper',
         openAccess: true,
       },
@@ -46,9 +46,9 @@ vi.mock('@/lib/research/semantic-scholar', () => ({
         authors: [{ name: 'Author One' }],
         year: 2022,
         citationCount: 100,
-        referenceCount: 25,
         abstract: 'Paper one abstract',
-        sources: ['semanticscholar'],
+        source: 'semantic-scholar',
+        url: 'https://semanticscholar.org/paper1',
         normalizedTitle: 'paper one',
         openAccess: true,
       },
@@ -58,9 +58,9 @@ vi.mock('@/lib/research/semantic-scholar', () => ({
         authors: [{ name: 'Cited Author' }],
         year: 2021,
         citationCount: 75,
-        referenceCount: 20,
         abstract: 'Cited abstract',
-        sources: ['semanticscholar'],
+        source: 'semantic-scholar',
+        url: 'https://semanticscholar.org/cited1',
         normalizedTitle: 'cited paper',
         openAccess: true,
       },
@@ -70,9 +70,9 @@ vi.mock('@/lib/research/semantic-scholar', () => ({
         authors: [{ name: 'Coupled Author' }],
         year: 2022,
         citationCount: 60,
-        referenceCount: 25,
         abstract: 'Coupled abstract',
-        sources: ['semanticscholar'],
+        source: 'semantic-scholar',
+        url: 'https://semanticscholar.org/coupled1',
         normalizedTitle: 'coupled paper',
         openAccess: true,
       },
@@ -90,9 +90,9 @@ vi.mock('@/lib/research/semantic-scholar', () => ({
           authors: [{ name: 'John Doe' }],
           year: 2023,
           citationCount: 50,
-          referenceCount: 30,
           abstract: 'Test abstract',
-          sources: ['semanticscholar'],
+          source: 'semantic-scholar',
+          url: 'https://semanticscholar.org/paper123',
           normalizedTitle: 'test paper',
           openAccess: true,
         },
@@ -102,9 +102,9 @@ vi.mock('@/lib/research/semantic-scholar', () => ({
           authors: [{ name: 'Coupled Author' }],
           year: 2022,
           citationCount: 60,
-          referenceCount: 25,
           abstract: 'Coupled abstract',
-          sources: ['semanticscholar'],
+          source: 'semantic-scholar',
+          url: 'https://semanticscholar.org/coupled1',
           normalizedTitle: 'coupled paper',
           openAccess: true,
         },
@@ -118,9 +118,9 @@ vi.mock('@/lib/research/semantic-scholar', () => ({
         authors: [{ name: 'Cited Author' }],
         year: 2021,
         citationCount: 75,
-        referenceCount: 20,
         abstract: 'Cited abstract',
-        sources: ['semanticscholar'],
+        source: 'semantic-scholar',
+        url: 'https://semanticscholar.org/cited1',
         normalizedTitle: 'cited paper',
         openAccess: true,
       }]);
@@ -136,9 +136,9 @@ vi.mock('@/lib/research/semantic-scholar', () => ({
         authors: [{ name: 'Cited Author' }],
         year: 2021,
         citationCount: 75,
-        referenceCount: 20,
         abstract: 'Cited abstract',
-        sources: ['semanticscholar'],
+        source: 'semantic-scholar',
+        url: 'https://semanticscholar.org/cited1',
         normalizedTitle: 'cited paper',
         openAccess: true,
       }]);
@@ -203,8 +203,8 @@ class CitationNetworkBuilder {
         onlyOpenAccess: false,
       },
       layout: { type: 'force', parameters: {} },
-      createdAt: MockTimestamp.now(),
-      updatedAt: MockTimestamp.now(),
+      createdAt: MockTimestamp.mockNow().toDate(),
+      updatedAt: MockTimestamp.mockNow().toDate(),
     };
     return mockNetwork;
   }
@@ -247,9 +247,9 @@ class CitationNetworkBuilder {
         authors: [],
         year: 2023,
         citationCount: 50,
-        referenceCount: 20,
         abstract: '',
-        sources: ['semanticscholar'],
+        source: 'semantic-scholar' as const,
+        url: `https://example.com/${p.paperId}`,
         normalizedTitle: '',
         openAccess: true,
       })),
@@ -257,6 +257,7 @@ class CitationNetworkBuilder {
     });
 
     network.papers.forEach(paper => {
+      const global: any = globalMetrics as any;
       metricsMap.set(paper.paperId, {
         centralityScore: Math.random() * 0.5 + 0.3,
         bridgeScore: Math.random() * 0.4 + 0.2,
@@ -264,7 +265,7 @@ class CitationNetworkBuilder {
         noveltyScore: Math.random() * 0.5 + 0.3,
         momentumScore: Math.random() * 10,
         clusterIds: [],
-        ...globalMetrics,
+        ...global,
       });
     });
 
@@ -280,9 +281,9 @@ class CitationNetworkBuilder {
       authors: [],
       year: 2023,
       citationCount: 50,
-      referenceCount: 20,
       abstract: '',
-      sources: ['semanticscholar'] as const,
+      source: 'semantic-scholar' as const,
+      url: `https://example.com/${p.paperId}`,
       normalizedTitle: '',
       openAccess: true,
     }));
@@ -519,8 +520,8 @@ describe('CitationNetworkBuilder', () => {
         clusters: [],
         config: mockConfig,
         layout: { type: 'force', parameters: {} },
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.mockNow().toDate(),
+        updatedAt: MockTimestamp.mockNow().toDate(),
       };
 
       const metrics = await builder.calculateNetworkMetrics(network);
@@ -539,8 +540,8 @@ describe('CitationNetworkBuilder', () => {
         clusters: [],
         config: mockConfig,
         layout: { type: 'force', parameters: {} },
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.mockNow().toDate(),
+        updatedAt: MockTimestamp.mockNow().toDate(),
       };
 
       const metrics = await builder.calculateNetworkMetrics(network);
@@ -562,8 +563,8 @@ describe('CitationNetworkBuilder', () => {
         clusters: [],
         config: mockConfig,
         layout: { type: 'force', parameters: {} },
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.mockNow().toDate(),
+        updatedAt: MockTimestamp.mockNow().toDate(),
       };
 
       const metrics = await builder.calculateNetworkMetrics(network);
@@ -585,8 +586,8 @@ describe('CitationNetworkBuilder', () => {
         clusters: [],
         config: mockConfig,
         layout: { type: 'force', parameters: {} },
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.mockNow().toDate(),
+        updatedAt: MockTimestamp.mockNow().toDate(),
       };
 
       const metrics = await builder.calculateNetworkMetrics(network);
@@ -608,8 +609,8 @@ describe('CitationNetworkBuilder', () => {
         clusters: [],
         config: mockConfig,
         layout: { type: 'force', parameters: {} },
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.mockNow().toDate(),
+        updatedAt: MockTimestamp.mockNow().toDate(),
       };
 
       const metrics = await builder.calculateNetworkMetrics(network);
@@ -631,8 +632,8 @@ describe('CitationNetworkBuilder', () => {
         clusters: [],
         config: mockConfig,
         layout: { type: 'force', parameters: {} },
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.mockNow().toDate(),
+        updatedAt: MockTimestamp.mockNow().toDate(),
       };
 
       const metrics = await builder.calculateNetworkMetrics(network);
@@ -665,8 +666,8 @@ describe('CitationNetworkBuilder', () => {
         clusters: [],
         config: mockConfig,
         layout: { type: 'force', parameters: {} },
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.mockNow().toDate(),
+        updatedAt: MockTimestamp.mockNow().toDate(),
       };
 
       const centrality = await builder.calculateCentrality('paper1', network);
@@ -696,8 +697,8 @@ describe('CitationNetworkBuilder', () => {
         clusters: [],
         config: mockConfig,
         layout: { type: 'force', parameters: {} },
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.mockNow().toDate(),
+        updatedAt: MockTimestamp.mockNow().toDate(),
       };
 
       const centrality = await builder.calculateCentrality('paper1', network);
@@ -718,8 +719,8 @@ describe('CitationNetworkBuilder', () => {
         clusters: [],
         config: mockConfig,
         layout: { type: 'force', parameters: {} },
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.mockNow().toDate(),
+        updatedAt: MockTimestamp.mockNow().toDate(),
       };
 
       const clusters = await builder.detectClusters(network);
@@ -739,8 +740,8 @@ describe('CitationNetworkBuilder', () => {
         clusters: [],
         config: mockConfig,
         layout: { type: 'force', parameters: {} },
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.mockNow().toDate(),
+        updatedAt: MockTimestamp.mockNow().toDate(),
       };
 
       const clusters = await builder.detectClusters(network);
@@ -762,8 +763,8 @@ describe('CitationNetworkBuilder', () => {
         clusters: [],
         config: mockConfig,
         layout: { type: 'force', parameters: {} },
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.mockNow().toDate(),
+        updatedAt: MockTimestamp.mockNow().toDate(),
       };
 
       const clusters = await builder.detectClusters(network);
@@ -806,8 +807,8 @@ describe('CitationNetworkBuilder', () => {
         ],
         config: mockConfig,
         layout: { type: 'force', parameters: {} },
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.mockNow().toDate(),
+        updatedAt: MockTimestamp.mockNow().toDate(),
       };
 
       const bridgePapers = await builder.findBridgePapers(network);

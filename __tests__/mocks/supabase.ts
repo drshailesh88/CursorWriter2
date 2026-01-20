@@ -11,8 +11,10 @@ import { createMockUser, createMockDocument, type MockUser, type MockDocument } 
 // Mock Timestamp
 // ============================================================
 
-export class MockTimestamp {
-  constructor(public seconds: number, public nanoseconds: number) {}
+export class MockTimestamp extends Date {
+  constructor(public seconds: number, public nanoseconds: number) {
+    super(seconds * 1000 + Math.floor(nanoseconds / 1000000));
+  }
 
   toDate(): Date {
     return new Date(this.seconds * 1000 + this.nanoseconds / 1000000);
@@ -26,11 +28,11 @@ export class MockTimestamp {
     return this.seconds === other.seconds && this.nanoseconds === other.nanoseconds;
   }
 
-  toJSON(): { seconds: number; nanoseconds: number } {
+  toObject(): { seconds: number; nanoseconds: number } {
     return { seconds: this.seconds, nanoseconds: this.nanoseconds };
   }
 
-  static now(): MockTimestamp {
+  static mockNow(): MockTimestamp {
     const now = Date.now();
     return new MockTimestamp(Math.floor(now / 1000), (now % 1000) * 1000000);
   }
