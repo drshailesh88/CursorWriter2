@@ -57,6 +57,7 @@ import { DiscoveryProvider } from '@/lib/contexts/discovery-context';
 import { GenerationDialog } from '@/components/presentations/generation-dialog';
 import { PresentationMode } from '@/components/presentations/presentation-mode';
 import { GenerationConfig, Presentation } from '@/lib/presentations/types';
+import { markdownToHtml } from '@/lib/utils/markdown';
 
 // Hook to detect mobile screen
 function useIsMobile() {
@@ -157,6 +158,7 @@ function ThreePanelContent() {
     documentId: currentDocumentId,
     autoSaveInterval: 30000, // 30 seconds
   });
+  const documentRefreshKey = `${currentDocumentId ?? 'none'}:${lastSaved?.getTime() ?? 0}`;
 
   // Handle discipline change from chat interface
   const handleDisciplineChange = async (newDiscipline: DisciplineId) => {
@@ -169,12 +171,7 @@ function ThreePanelContent() {
 
   // Handle inserting content from chat into the editor
   const handleInsertToEditor = (chatContent: string) => {
-    // Convert markdown to HTML for the editor
-    // For now, just append to content with proper paragraph tags
-    const htmlContent = chatContent
-      .split('\n\n')
-      .map(para => `<p>${para.replace(/\n/g, '<br>')}</p>`)
-      .join('');
+    const htmlContent = markdownToHtml(chatContent);
 
     const newContent = content
       ? `${content}${htmlContent}`
@@ -548,6 +545,7 @@ function ThreePanelContent() {
                   onDocumentSelect={handleDocumentSelect}
                   onCreateNew={handleCreateNew}
                   onDocumentDeleted={handleDocumentDeleted}
+                  refreshKey={documentRefreshKey}
                 />
               ) : (
                 <div className="p-4 text-center text-muted-foreground">
@@ -762,6 +760,7 @@ function ThreePanelContent() {
                   onDocumentSelect={handleDocumentSelect}
                   onCreateNew={handleCreateNew}
                   onDocumentDeleted={handleDocumentDeleted}
+                  refreshKey={documentRefreshKey}
                 />
               ) : (
                 <div className="p-4">
