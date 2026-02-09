@@ -16,6 +16,7 @@ interface DocumentListProps {
   onDocumentSelect: (documentId: string) => void;
   onCreateNew: (template?: DocumentTemplate) => void;
   onDocumentDeleted?: (documentId: string) => void;
+  refreshKey?: string | number;
 }
 
 export function DocumentList({
@@ -23,6 +24,7 @@ export function DocumentList({
   onDocumentSelect,
   onCreateNew,
   onDocumentDeleted,
+  refreshKey,
 }: DocumentListProps) {
   const { user } = useAuth();
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
@@ -52,7 +54,7 @@ export function DocumentList({
     }
 
     loadDocuments();
-  }, [user]);
+  }, [user, refreshKey]);
 
   const handleDelete = async (docId: string, e: React.MouseEvent) => {
     e.stopPropagation();

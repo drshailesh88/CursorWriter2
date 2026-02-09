@@ -92,12 +92,30 @@
       ],
       "fix": "Replaced pdf-parse (v2.x has worker issues in Next.js) with unpdf library which is serverless-compatible. Updated extractText() method to use new API.",
       "status": "FIXED"
+    },
+    {
+      "issue": "Markdown inserted into editor shows raw syntax",
+      "files_modified": [
+        "lib/utils/markdown.ts",
+        "components/layout/three-panel-layout.tsx"
+      ],
+      "fix": "Added markdown-to-HTML conversion utility and used it for insert-to-editor so AI output renders like rich text.",
+      "status": "FIXED"
+    },
+    {
+      "issue": "Document history list not refreshing after saves/creates",
+      "files_modified": [
+        "components/history/document-list.tsx",
+        "components/layout/three-panel-layout.tsx"
+      ],
+      "fix": "Added refresh key tied to current document and last saved timestamp to reload history list.",
+      "status": "FIXED"
     }
   ],
   "current_task": {
-    "name": "Audit remediation complete",
-    "description": "All identified remediation items are implemented and verified.",
-    "next_action": "Optional: run browser E2E smoke checks, then commit/merge when approved."
+    "name": "Fix editor insert formatting and history refresh",
+    "description": "Convert markdown inserts to HTML and refresh document list after saves/creates.",
+    "next_action": "Run type-check/tests and verify research/papers/discovery tabs still render."
   },
   "parallel_test_results": {
     "executed_at": "2026-01-19T18:30:00Z",
@@ -360,8 +378,8 @@
     "analyzed_at": "2026-01-21",
     "status": "ARCHITECTURE SOUND - WELL IMPLEMENTED",
     "architecture": {
-      "upload_flow": "PDF → Supabase Storage → pdf-parse extraction → Paper & PaperContent DB records",
-      "chat_flow": "User Query → Cache Check → Load Papers → Hybrid RAG → RRF Fusion → LLM Stream → Cited Response",
+      "upload_flow": "PDF \u2192 Supabase Storage \u2192 pdf-parse extraction \u2192 Paper & PaperContent DB records",
+      "chat_flow": "User Query \u2192 Cache Check \u2192 Load Papers \u2192 Hybrid RAG \u2192 RRF Fusion \u2192 LLM Stream \u2192 Cited Response",
       "retrieval": "Hybrid (BM25 40% + Dense embeddings 60% via OpenAI) with optional Cohere reranking"
     },
     "key_files": [
@@ -385,7 +403,7 @@
     "user_flow": [
       "1. Click Papers button in top bar (or Cmd+Shift+L)",
       "2. Upload PDF via drag-and-drop or file picker",
-      "3. Wait for processing (status changes: uploading → processing → ready)",
+      "3. Wait for processing (status changes: uploading \u2192 processing \u2192 ready)",
       "4. Click 'Chat' button on paper card",
       "5. PaperChat slide-out panel opens with paper selected",
       "6. Ask questions - system retrieves relevant passages and streams LLM response with citations"
@@ -402,7 +420,7 @@
       "no_ocr": "Scanned PDFs detected but not OCR'd - text extraction incomplete for image-based PDFs"
     }
   },
-  "last_updated": "2026-02-09T10:45:00.000Z",
+  "last_updated": "2026-02-09T12:35:56Z",
   "audit_remediation_2026_02_09": {
     "branch": "feature/full-audit-remediation",
     "verification": {
@@ -432,13 +450,17 @@
         "id": "T001",
         "title": "Research stream race condition",
         "fix": "Added isExecuting guard to EngineSession + complete/error status check in executeSession(). Prevents duplicate parallel execution from multiple SSE clients.",
-        "files": ["lib/deep-research/engine.ts"]
+        "files": [
+          "lib/deep-research/engine.ts"
+        ]
       },
       {
         "id": "T002",
         "title": "PDF processing silent failure",
         "fix": "ALREADY FIXED in audit remediation. processInBackground already catches errors and calls updatePaperStatus(paperId, 'error'). No change needed.",
-        "files": ["app/api/papers/upload/route.ts"]
+        "files": [
+          "app/api/papers/upload/route.ts"
+        ]
       },
       {
         "id": "T003-T006",
@@ -464,7 +486,10 @@
         "id": "T008",
         "title": "Remove legacy research stream placeholder",
         "fix": "Deleted app/api/research/stream/route.ts and lib/research/stream-utils.ts. Only referenced by the legacy route itself.",
-        "files": ["DELETED: app/api/research/stream/route.ts", "DELETED: lib/research/stream-utils.ts"]
+        "files": [
+          "DELETED: app/api/research/stream/route.ts",
+          "DELETED: lib/research/stream-utils.ts"
+        ]
       },
       {
         "id": "T009",
@@ -476,7 +501,10 @@
         "id": "T010",
         "title": "Real-time subscriptions",
         "fix": "Added error handling to both subscribeToComments() and subscribeToTrackedChanges() - try/catch in event handler + subscribe status callback for CHANNEL_ERROR.",
-        "files": ["lib/collaboration/comments.ts", "lib/collaboration/track-changes.ts"]
+        "files": [
+          "lib/collaboration/comments.ts",
+          "lib/collaboration/track-changes.ts"
+        ]
       },
       {
         "id": "T011",

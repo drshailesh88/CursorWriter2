@@ -67,6 +67,7 @@ export function FeatureTabs({ activeTab, onTabChange, badges }: FeatureTabsProps
         return (
           <button
             key={tab.id}
+            id={`tab-${tab.id}`}
             role="tab"
             aria-selected={isActive}
             aria-controls={`panel-${tab.id}`}
