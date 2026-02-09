@@ -20,6 +20,7 @@ import type {
 } from './types';
 import { searchSemanticScholar } from '@/lib/research/semantic-scholar';
 import { searchOpenAlex } from '@/lib/research/openalex';
+import { getPapersByIds } from '@/lib/supabase/papers';
 import { toDiscoveredPapers } from './utils';
 
 /**
@@ -64,6 +65,85 @@ export async function generateMap(
     userId: '', // Set by caller
     name: `Knowledge Map: ${query}`,
     query,
+    clusters: mapClusters,
+    papers: mapPapers,
+    connections,
+    config: fullConfig,
+    createdAt: new Date() as any,
+    updatedAt: new Date() as any,
+  };
+}
+
+/**
+ * Generate knowledge map from specific paper IDs (user's library)
+ */
+export async function generateMapFromPapers(
+  paperIds: string[],
+  config: Partial<MapConfig> = {}
+): Promise<KnowledgeMap> {
+  const fullConfig: MapConfig = {
+    clusterCount: config.clusterCount ?? Math.min(5, Math.max(2, Math.floor(paperIds.length / 3))),
+    paperLimit: config.paperLimit ?? paperIds.length,
+    showLabels: config.showLabels ?? true,
+    showConnections: config.showConnections ?? true,
+    timeRange: config.timeRange || {
+      start: new Date().getFullYear() - 10,
+      end: new Date().getFullYear(),
+    },
+  };
+
+  // Fetch papers from Supabase
+  const dbPapers = await getPapersByIds(paperIds);
+
+  if (dbPapers.length === 0) {
+    throw new Error('No papers found for the provided IDs');
+  }
+
+  // Convert Supabase Paper objects to SearchResult format
+  const papers: SearchResult[] = dbPapers.map((p) => ({
+    id: p.id,
+    source: 'openalex' as const,
+    title: p.title || p.fileName,
+    authors: p.authors.map((a) => ({ name: a.name })),
+    abstract: p.abstract || '',
+    year: p.year || new Date().getFullYear(),
+    doi: p.doi,
+    pmid: p.pmid,
+    arxivId: p.arxivId,
+    url: p.storageUrl || '',
+    openAccess: false,
+    keywords: p.keywords || [],
+    journal: p.journal,
+  }));
+
+  // Cluster papers by topic
+  const clusters = await clusterPapers(papers, fullConfig.clusterCount);
+
+  // Label clusters
+  const labeledClusters = await labelClusters(clusters);
+
+  // Position clusters and papers
+  const { mapClusters, mapPapers } = positionClustersAndPapers(
+    labeledClusters,
+    papers,
+    fullConfig
+  );
+
+  // Find connections between clusters
+  const connections = findConnections(labeledClusters, papers);
+
+  // Derive a topic from the paper titles
+  const topKeywords = getMostFrequent(
+    papers.flatMap((p) => p.title.toLowerCase().split(/\s+/).filter((w) => w.length > 4)),
+    3
+  );
+  const derivedTopic = topKeywords.join(', ') || 'Library papers';
+
+  return {
+    id: `map-${Date.now()}`,
+    userId: '',
+    name: `Knowledge Map: ${derivedTopic}`,
+    query: derivedTopic,
     clusters: mapClusters,
     papers: mapPapers,
     connections,

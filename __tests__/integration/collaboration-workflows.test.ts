@@ -10,7 +10,7 @@
  */
 
 import { describe, test, expect, beforeEach, vi } from 'vitest';
-import { mockDatabase, resetSupabaseMocks } from '../mocks/supabase';
+import { mockDatabase, resetSupabaseMocks, mockSupabaseBrowserClient } from '../mocks/supabase';
 import { createMockUser, createMockDocument } from '../mocks/test-data';
 import type {
   Comment,
@@ -35,6 +35,7 @@ vi.stubGlobal('crypto', {
 // Mock Supabase client
 vi.mock('@/lib/supabase/client', () => ({
   db: () => mockDatabase,
+  getSupabaseBrowserClient: () => mockSupabaseBrowserClient,
 }));
 
 vi.mock('@/lib/supabase/schema', () => ({

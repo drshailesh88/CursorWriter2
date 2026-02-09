@@ -48,6 +48,8 @@ class RecommendationEngine {
       title: p.title,
       authors: p.authors,
       year: p.year,
+      source: 'semantic-scholar',
+      url: `https://example.org/${p.id}`,
       citationCount: p.citationCount,
       referenceCount: p.referenceCount,
       abstract: p.abstract || '',
@@ -175,7 +177,7 @@ class DraftAnalyzer {
       citationGaps: gaps,
       coverageScore,
       suggestions,
-      analyzedAt: MockTimestamp.now(),
+      analyzedAt: MockTimestamp.timestampNow(),
     };
   }
 
@@ -523,7 +525,7 @@ describe('RecommendationEngine', () => {
         type: 'accepted_recommendation',
         paperId: 'paper1',
         topic: 'deep learning',
-        timestamp: MockTimestamp.now(),
+        timestamp: MockTimestamp.timestampNow(),
       };
 
       await expect(
@@ -536,7 +538,7 @@ describe('RecommendationEngine', () => {
       const event: LearningEvent = {
         type: 'rejected_recommendation',
         paperId: 'paper1',
-        timestamp: MockTimestamp.now(),
+        timestamp: MockTimestamp.timestampNow(),
       };
 
       await expect(
@@ -549,7 +551,7 @@ describe('RecommendationEngine', () => {
       const event: LearningEvent = {
         type: 'added_paper',
         paperId: 'paper1',
-        timestamp: MockTimestamp.now(),
+        timestamp: MockTimestamp.timestampNow(),
       };
 
       await expect(
@@ -562,7 +564,7 @@ describe('RecommendationEngine', () => {
       const event: LearningEvent = {
         type: 'read_paper',
         paperId: 'paper1',
-        timestamp: MockTimestamp.now(),
+        timestamp: MockTimestamp.timestampNow(),
       };
 
       await expect(

@@ -133,7 +133,7 @@ describe('PDF Export', () => {
       // Look for "Page X of Y" pattern in text calls
       const pdf = getMockPdf();
       const textCalls = pdf.text.mock.calls;
-      const hasPageNumbers = textCalls.some((call) =>
+      const hasPageNumbers = textCalls.some((call: unknown[]) =>
         typeof call[0] === 'string' && call[0].includes('Page')
       );
 
@@ -151,7 +151,7 @@ describe('PDF Export', () => {
       // Should have page number calls
       const pdf = getMockPdf();
       const textCalls = pdf.text.mock.calls;
-      const pageNumberCalls = textCalls.filter((call) =>
+      const pageNumberCalls = textCalls.filter((call: unknown[]) =>
         typeof call[0] === 'string' && call[0].match(/Page \d+ of \d+/)
       );
 
@@ -181,7 +181,7 @@ describe('PDF Export', () => {
 
       const pdf = getMockPdf();
       const textCalls = pdf.text.mock.calls;
-      const hasAuthor = textCalls.some((call) =>
+      const hasAuthor = textCalls.some((call: unknown[]) =>
         typeof call[0] === 'string' && call[0].includes('Dr. Smith')
       );
 
@@ -197,7 +197,7 @@ describe('PDF Export', () => {
 
       const pdf = getMockPdf();
       const textCalls = pdf.text.mock.calls;
-      const hasTitle = textCalls.some((call) =>
+      const hasTitle = textCalls.some((call: unknown[]) =>
         typeof call[0] === 'string' && call[0].includes('Research Paper')
       );
 
@@ -224,7 +224,7 @@ describe('PDF Export', () => {
 
       const pdf = getMockPdf();
       const textCalls = pdf.text.mock.calls;
-      const hasTOC = textCalls.some((call) =>
+      const hasTOC = textCalls.some((call: unknown[]) =>
         typeof call[0] === 'string' && call[0].includes('Table of Contents')
       );
 
@@ -242,7 +242,7 @@ describe('PDF Export', () => {
 
       const pdf = getMockPdf();
       const textCalls = pdf.text.mock.calls;
-      const hasTOC = textCalls.some((call) =>
+      const hasTOC = textCalls.some((call: unknown[]) =>
         typeof call[0] === 'string' && call[0].includes('Table of Contents')
       );
 
@@ -278,7 +278,7 @@ describe('PDF Export', () => {
       // Check that text is positioned with margin offset (72 points = 1 inch)
       const pdf = getMockPdf();
       const textCalls = pdf.text.mock.calls;
-      const hasCorrectMargins = textCalls.some((call) => {
+      const hasCorrectMargins = textCalls.some((call: unknown[]) => {
         const x = typeof call[1] === 'number' ? call[1] : 0;
         // Should be at or near 72 (1 inch) or adjusted for line numbers
         return x >= 72;
@@ -362,7 +362,7 @@ describe('PDF Export', () => {
 
       const pdf = getMockPdf();
       const textCalls = pdf.text.mock.calls;
-      const hasWatermark = textCalls.some((call) =>
+      const hasWatermark = textCalls.some((call: unknown[]) =>
         typeof call[0] === 'string' && call[0] === 'DRAFT'
       );
 
@@ -398,7 +398,7 @@ describe('PDF Export', () => {
 
       const pdf = getMockPdf();
       const textCalls = pdf.text.mock.calls;
-      const watermarkCount = textCalls.filter((call) =>
+      const watermarkCount = textCalls.filter((call: unknown[]) =>
         typeof call[0] === 'string' && call[0] === 'CONFIDENTIAL'
       ).length;
 
@@ -535,7 +535,7 @@ describe('PDF Export', () => {
 
       const pdf = getMockPdf();
       const textCalls = pdf.text.mock.calls;
-      const hasBullets = textCalls.some((call) =>
+      const hasBullets = textCalls.some((call: unknown[]) =>
         typeof call[0] === 'string' && call[0].includes('•')
       );
 

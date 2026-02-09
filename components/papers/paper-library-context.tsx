@@ -51,6 +51,10 @@ export function usePaperLibrary() {
   return context;
 }
 
+export function usePaperLibraryOptional() {
+  return useContext(PaperLibraryContext);
+}
+
 interface PaperLibraryProviderProps {
   userId: string;
   children: ReactNode;

@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils/cn';
 import {
   Network,
-  Map,
+  Map as MapIcon,
   Lightbulb,
   Clock,
   Search,
@@ -50,6 +50,17 @@ export interface Paper {
   citationCount?: number;
   doi?: string;
   pmid?: string;
+}
+
+interface ResolvedPaperDetail {
+  paperId: string;
+  title: string;
+  authors: string[];
+  year: number;
+  citationCount: number;
+  journal?: string;
+  pdfUrl?: string;
+  openAccess?: boolean;
 }
 
 interface IntegratedDiscoveryPanelProps {
@@ -103,10 +114,105 @@ export function IntegratedDiscoveryPanel({
   const [selectedPaperIds, setSelectedPaperIds] = useState<string[]>([]);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingMessage, setLoadingMessage] = useState('');
+  const [paperDetailsById, setPaperDetailsById] = useState<Record<string, ResolvedPaperDetail>>({});
 
   // Get current view's loading and error state
   const isLoading = getCurrentViewLoading();
   const error = getCurrentViewError();
+
+  // Prime local detail cache from seed/library papers
+  useEffect(() => {
+    if (seedPapers.length === 0) return;
+
+    setPaperDetailsById((prev) => {
+      const next = { ...prev };
+      for (const paper of seedPapers) {
+        next[paper.id] = {
+          paperId: paper.id,
+          title: paper.title,
+          authors: paper.authors,
+          year: paper.year,
+          citationCount: paper.citationCount || 0,
+          openAccess: true,
+        };
+      }
+      return next;
+    });
+  }, [seedPapers]);
+
+  const resolvePaperDetail = useCallback(
+    (paperId: string): ResolvedPaperDetail => {
+      const existing = paperDetailsById[paperId];
+      if (existing) return existing;
+
+      return {
+        paperId,
+        title: `Paper ${paperId.slice(0, 8)}`,
+        authors: ['Unknown'],
+        year: new Date().getFullYear(),
+        citationCount: 0,
+      };
+    },
+    [paperDetailsById]
+  );
+
+  const requiredPaperIds = useMemo(() => {
+    const ids = new Set<string>();
+
+    networkData?.papers.forEach((paper) => ids.add(paper.paperId));
+    mapData?.papers.forEach((paper) => ids.add(paper.paperId));
+    timelineData?.papers.forEach((paper) => ids.add(paper.paperId));
+
+    if (recommendations) {
+      recommendations.hotNow.forEach((rec) => ids.add(rec.paperId));
+      recommendations.missingFromReview.forEach((rec) => ids.add(rec.paperId));
+      recommendations.newThisWeek.forEach((rec) => ids.add(rec.paperId));
+      recommendations.sameAuthors.forEach((rec) => ids.add(rec.paperId));
+      recommendations.extendingWork.forEach((rec) => ids.add(rec.paperId));
+    }
+
+    if (connectionPath) {
+      ids.add(connectionPath.sourcePaperId);
+      ids.add(connectionPath.targetPaperId);
+      connectionPath.paths.forEach((path) => {
+        path.papers.forEach((paperId) => ids.add(paperId));
+      });
+    }
+
+    return Array.from(ids);
+  }, [networkData, mapData, timelineData, recommendations, connectionPath]);
+
+  useEffect(() => {
+    const missingIds = requiredPaperIds.filter((id) => !paperDetailsById[id]).slice(0, 50);
+    if (missingIds.length === 0) return;
+
+    let cancelled = false;
+
+    const fetchMissingPaperDetails = async () => {
+      try {
+        const response = await fetch('/api/discovery/papers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ paperIds: missingIds }),
+        });
+
+        if (!response.ok) return;
+
+        const payload = await response.json();
+        if (cancelled || !payload?.papers) return;
+
+        setPaperDetailsById((prev) => ({ ...prev, ...payload.papers }));
+      } catch (metadataError) {
+        console.error('Failed to resolve discovery paper metadata:', metadataError);
+      }
+    };
+
+    fetchMissingPaperDetails();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [requiredPaperIds, paperDetailsById]);
 
   /**
    * Handle search/discover action
@@ -286,10 +392,10 @@ export function IntegratedDiscoveryPanel({
     const nodes: NetworkNode[] = networkData.papers.map(paper => ({
       id: paper.paperId,
       paperId: paper.paperId,
-      title: '', // Would need to fetch from paper details
-      authors: [],
-      year: 2024, // Would need from paper details
-      citationCount: 0,
+      title: resolvePaperDetail(paper.paperId).title,
+      authors: resolvePaperDetail(paper.paperId).authors,
+      year: resolvePaperDetail(paper.paperId).year,
+      citationCount: resolvePaperDetail(paper.paperId).citationCount,
       isSeed: networkData.seedPaperIds.includes(paper.paperId),
       x: paper.x,
       y: paper.y,
@@ -299,7 +405,7 @@ export function IntegratedDiscoveryPanel({
       nodes,
       edges: networkData.edges,
     };
-  }, [networkData]);
+  }, [networkData, resolvePaperDetail]);
 
   /**
    * Transform map data for KnowledgeMap component
@@ -324,8 +430,8 @@ export function IntegratedDiscoveryPanel({
       papers: mapData.papers.map(paper => ({
         paperId: paper.paperId,
         clusterId: paper.clusterId,
-        title: '', // Would need to fetch from paper details
-        year: 2024, // Would need from paper details
+        title: resolvePaperDetail(paper.paperId).title,
+        year: resolvePaperDetail(paper.paperId).year,
         x: paper.x,
         y: paper.y,
         isUserPaper: paper.isUserPaper,
@@ -333,7 +439,7 @@ export function IntegratedDiscoveryPanel({
       })),
       connections: mapData.connections,
     };
-  }, [mapData]);
+  }, [mapData, resolvePaperDetail]);
 
   /**
    * Transform recommendations for RecommendationsPanel
@@ -341,13 +447,51 @@ export function IntegratedDiscoveryPanel({
   const recommendationsData: RecommendationsData | undefined = useMemo(() => {
     if (!recommendations) return undefined;
 
-    // Transform lib Recommendation to component Recommendation
-    // The lib Recommendation only has paperId, score, reason, type
-    // We need to fetch paper details to get title, authors, etc.
-    // For now, return undefined to show empty state
-    // TODO: Fetch paper details for recommendations
-    return undefined;
-  }, [recommendations]);
+    const mapType = (type: string) => {
+      switch (type) {
+        case 'hot':
+          return 'hot';
+        case 'missing':
+          return 'missing';
+        case 'new':
+          return 'new';
+        case 'author':
+          return 'author';
+        case 'extending':
+          return 'extending';
+        default:
+          return 'trending';
+      }
+    };
+
+    const transform = (items: typeof recommendations.hotNow) =>
+      items.map((item) => {
+        const detail = resolvePaperDetail(item.paperId);
+        return {
+          paperId: item.paperId,
+          title: detail.title,
+          authors: detail.authors,
+          year: detail.year,
+          journal: detail.journal,
+          citationCount: detail.citationCount,
+          score: item.score,
+          reason: item.reason,
+          type: mapType(item.type) as 'hot' | 'missing' | 'new' | 'author' | 'extending' | 'trending',
+          relatedPaperIds: item.relatedPaperIds,
+          openAccess: detail.openAccess,
+          pdfUrl: detail.pdfUrl,
+        };
+      });
+
+    return {
+      hotNow: transform(recommendations.hotNow),
+      missingFromReview: transform(recommendations.missingFromReview),
+      newThisWeek: transform(recommendations.newThisWeek),
+      sameAuthors: transform(recommendations.sameAuthors),
+      extendingWork: transform(recommendations.extendingWork),
+      updatedAt: new Date(),
+    };
+  }, [recommendations, resolvePaperDetail]);
 
   /**
    * Transform timeline data for TimelineView
@@ -358,10 +502,10 @@ export function IntegratedDiscoveryPanel({
     // Transform TimelinePaper to match the expected format
     const transformedPapers = timelineData.papers.map(paper => ({
       paperId: paper.paperId,
-      title: '', // Would need to fetch from paper details
-      authors: [], // Would need from paper details
+      title: resolvePaperDetail(paper.paperId).title,
+      authors: resolvePaperDetail(paper.paperId).authors,
       year: paper.year,
-      citationCount: 0, // Would need from paper details
+      citationCount: resolvePaperDetail(paper.paperId).citationCount,
       isSeminal: paper.importance > 0.8,
       isSeed: false,
     }));
@@ -377,7 +521,7 @@ export function IntegratedDiscoveryPanel({
       milestones: timelineData.milestones,
       trends: transformedTrends,
     };
-  }, [timelineData]);
+  }, [timelineData, resolvePaperDetail]);
 
   /**
    * Transform frontiers data for FrontierDashboard
@@ -403,10 +547,38 @@ export function IntegratedDiscoveryPanel({
   const connectionData: LiteratureConnectionData | undefined = useMemo(() => {
     if (!connectionPath) return undefined;
 
-    // This would require fetching paper details for the paper IDs
-    // For now, return undefined and let LiteratureConnector handle it
-    return undefined;
-  }, [connectionPath]);
+    const mapPathPaper = (paperId: string): PathPaper => {
+      const detail = resolvePaperDetail(paperId);
+      return {
+        paperId,
+        title: detail.title,
+        authors: detail.authors,
+        year: detail.year,
+        citationCount: detail.citationCount,
+      };
+    };
+
+    const mappedPaths = connectionPath.paths.map((path, index) => ({
+      id: path.id || `path-${index + 1}`,
+      papers: path.papers.map(mapPathPaper),
+      edges: path.edges,
+      totalWeight: path.totalWeight,
+      type: path.type,
+    }));
+
+    if (mappedPaths.length === 0) return undefined;
+
+    const sourcePaper = mapPathPaper(connectionPath.sourcePaperId);
+    const targetPaper = mapPathPaper(connectionPath.targetPaperId);
+    const shortestPath = mappedPaths.find((path) => path.id === connectionPath.shortestPath.id) || mappedPaths[0];
+
+    return {
+      sourcePaper,
+      targetPaper,
+      paths: mappedPaths,
+      shortestPath,
+    };
+  }, [connectionPath, resolvePaperDetail]);
 
   /**
    * Handle paper connection request
@@ -427,14 +599,32 @@ export function IntegratedDiscoveryPanel({
    * Get available papers for connector (from seed papers)
    */
   const availablePapersForConnector: PathPaper[] = useMemo(() => {
-    return seedPapers.map(paper => ({
-      paperId: paper.id,
-      title: paper.title,
-      authors: paper.authors,
-      year: paper.year,
-      citationCount: paper.citationCount || 0,
-    }));
-  }, [seedPapers]);
+    const byId = new Map<string, PathPaper>();
+
+    for (const paper of seedPapers) {
+      byId.set(paper.id, {
+        paperId: paper.id,
+        title: paper.title,
+        authors: paper.authors,
+        year: paper.year,
+        citationCount: paper.citationCount || 0,
+      });
+    }
+
+    for (const [paperId, detail] of Object.entries(paperDetailsById)) {
+      if (!byId.has(paperId)) {
+        byId.set(paperId, {
+          paperId,
+          title: detail.title,
+          authors: detail.authors,
+          year: detail.year,
+          citationCount: detail.citationCount,
+        });
+      }
+    }
+
+    return Array.from(byId.values());
+  }, [seedPapers, paperDetailsById]);
 
   return (
     <div className={cn('h-full flex flex-col bg-background rounded-lg border', className)}>
@@ -532,7 +722,7 @@ export function IntegratedDiscoveryPanel({
               <span className="sm:hidden ml-1">1</span>
             </TabsTrigger>
             <TabsTrigger value="map" className="text-xs whitespace-nowrap px-2 md:px-3">
-              <Map className="w-3 h-3 md:mr-1" />
+              <MapIcon className="w-3 h-3 md:mr-1" />
               <span className="hidden sm:inline ml-1">Map</span>
               <span className="sm:hidden ml-1">2</span>
             </TabsTrigger>
@@ -583,7 +773,7 @@ export function IntegratedDiscoveryPanel({
               <KnowledgeMap data={knowledgeMapData} />
             ) : (
               <EmptyState
-                icon={Map}
+                icon={MapIcon}
                 message="No map data available"
                 description="Enter a research topic to visualize the research landscape and identify clusters"
               />
@@ -658,12 +848,26 @@ export function IntegratedDiscoveryPanel({
               connectionData={connectionData}
               onConnect={handleConnect}
               onAddIntermediatesToLibrary={(paperIds) => {
-                // TODO: Implement adding intermediates to library
-                console.log('Add intermediates:', paperIds);
+                if (!onAddToLibrary) return;
+                for (const paperId of paperIds) {
+                  const detail = resolvePaperDetail(paperId);
+                  onAddToLibrary({
+                    id: paperId,
+                    title: detail.title,
+                    authors: detail.authors,
+                    year: detail.year,
+                    citationCount: detail.citationCount,
+                  });
+                }
               }}
               onPaperClick={(paperId) => {
-                // TODO: Implement paper details view
-                console.log('Paper clicked:', paperId);
+                if (!onAddCitation) return;
+                const detail = resolvePaperDetail(paperId);
+                onAddCitation({
+                  paperId,
+                  title: detail.title,
+                  authors: detail.authors,
+                });
               }}
               isLoading={isLoading}
             />

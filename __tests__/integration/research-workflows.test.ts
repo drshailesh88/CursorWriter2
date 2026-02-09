@@ -587,14 +587,12 @@ describe('Cite-While-You-Write Workflow', () => {
     expect(refs.length).toBe(2);
 
     // Format multiple citations individually
-    if (
-      refs[0].authors &&
-      refs[0].authors.length > 0 &&
-      refs[1].authors &&
-      refs[1].authors.length > 0
-    ) {
-      const citation1 = formatCitation(refs[0], 'apa-7');
-      const citation2 = formatCitation(refs[1], 'apa-7');
+    const smithRef = refs.find((ref) => ref.authors?.some((author) => author.family === 'Smith'));
+    const jonesRef = refs.find((ref) => ref.authors?.some((author) => author.family === 'Jones'));
+
+    if (smithRef && jonesRef) {
+      const citation1 = formatCitation(smithRef, 'apa-7');
+      const citation2 = formatCitation(jonesRef, 'apa-7');
 
       expect(citation1).toContain('Smith');
       expect(citation2).toContain('Jones');

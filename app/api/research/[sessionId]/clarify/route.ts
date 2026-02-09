@@ -1,6 +1,7 @@
 // Research Clarification API - Submit clarification answers
 import { NextRequest, NextResponse } from 'next/server';
 import { researchEngine, type ClarificationAnswer } from '@/lib/deep-research/engine';
+import { resolveApiUser, authErrorResponse } from '@/lib/supabase/api-auth';
 
 interface ClarifyRequest {
   answers: ClarificationAnswer[];
@@ -16,12 +17,18 @@ export async function POST(
 ) {
   try {
     const { sessionId } = params;
+    const authResult = await resolveApiUser(request);
+    if (!authResult.userId) {
+      return authErrorResponse(authResult);
+    }
+    const userId = authResult.userId;
+
     const body: ClarifyRequest = await request.json();
     const { answers, skip } = body;
 
     // Check if session exists
     const session = researchEngine.getSession(sessionId);
-    if (!session) {
+    if (!session || session.userId !== userId) {
       return NextResponse.json(
         { error: 'Session not found' },
         { status: 404 }

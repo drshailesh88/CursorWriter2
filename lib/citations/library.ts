@@ -471,7 +471,8 @@ export async function findDuplicates(
       if (reference.title && existing.title) {
         const normalizedNew = reference.title.toLowerCase().replace(/[^a-z0-9]/g, '');
         const normalizedExisting = existing.title.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (normalizedNew === normalizedExisting) {
+        // Avoid false positives for short/noisy titles.
+        if (normalizedNew.length >= 20 && normalizedExisting.length >= 20 && normalizedNew === normalizedExisting) {
           duplicates.push(existing);
         }
       }
@@ -808,11 +809,17 @@ export async function getLibraryStats(userId: string): Promise<{
   totalLabels: number;
   totalFavorites: number;
   readStatusCounts: Record<string, number>;
+  byType: Record<string, number>;
+  byYear: Record<number, number>;
+  favorites: number;
+  unread: number;
 }> {
   const refs = await getAllReferences(userId);
   const folders = await getFolders(userId);
   const labels = await getLabels(userId);
 
+  const byType: Record<string, number> = {};
+  const byYear: Record<number, number> = {};
   const readStatusCounts: Record<string, number> = {
     unread: 0,
     reading: 0,
@@ -820,16 +827,26 @@ export async function getLibraryStats(userId: string): Promise<{
   };
 
   refs.forEach((ref) => {
+    byType[ref.type] = (byType[ref.type] || 0) + 1;
+    byYear[ref.issued.year] = (byYear[ref.issued.year] || 0) + 1;
+
     if (ref.readStatus) {
       readStatusCounts[ref.readStatus] = (readStatusCounts[ref.readStatus] || 0) + 1;
     }
   });
 
+  const favorites = refs.filter((ref) => ref.favorite).length;
+  const unread = readStatusCounts.unread || 0;
+
   return {
     totalReferences: refs.length,
     totalFolders: folders.length,
     totalLabels: labels.length,
-    totalFavorites: refs.filter((ref) => ref.favorite).length,
+    totalFavorites: favorites,
     readStatusCounts,
+    byType,
+    byYear,
+    favorites,
+    unread,
   };
 }

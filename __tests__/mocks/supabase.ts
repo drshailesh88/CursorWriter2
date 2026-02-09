@@ -11,26 +11,37 @@ import { createMockUser, createMockDocument, type MockUser, type MockDocument } 
 // Mock Timestamp
 // ============================================================
 
-export class MockTimestamp {
-  constructor(public seconds: number, public nanoseconds: number) {}
+export class MockTimestamp extends Date {
+  public seconds: number;
+  public nanoseconds: number;
+
+  constructor(seconds: number, nanoseconds: number) {
+    super(seconds * 1000 + nanoseconds / 1000000);
+    this.seconds = seconds;
+    this.nanoseconds = nanoseconds;
+  }
 
   toDate(): Date {
-    return new Date(this.seconds * 1000 + this.nanoseconds / 1000000);
+    return new Date(this.getTime());
   }
 
   toMillis(): number {
-    return this.seconds * 1000 + Math.floor(this.nanoseconds / 1000000);
+    return this.getTime();
   }
 
   isEqual(other: MockTimestamp): boolean {
     return this.seconds === other.seconds && this.nanoseconds === other.nanoseconds;
   }
 
-  toJSON(): { seconds: number; nanoseconds: number } {
+  toJSON(key?: unknown): string {
+    return super.toJSON();
+  }
+
+  toTimestampObject(): { seconds: number; nanoseconds: number } {
     return { seconds: this.seconds, nanoseconds: this.nanoseconds };
   }
 
-  static now(): MockTimestamp {
+  static timestampNow(): MockTimestamp {
     const now = Date.now();
     return new MockTimestamp(Math.floor(now / 1000), (now % 1000) * 1000000);
   }
@@ -473,6 +484,281 @@ export class MockDatabase {
 }
 
 // ============================================================
+// Supabase Browser Client Mock (table/query builder style)
+// ============================================================
+
+type Filter =
+  | { type: 'eq'; field: string; value: unknown }
+  | { type: 'in'; field: string; values: unknown[] }
+  | { type: 'contains'; field: string; values: unknown[] };
+
+type OrderBy = { field: string; ascending: boolean };
+let mockSupabaseTimestampOffset = 0;
+
+class MockSupabaseTableQuery {
+  private operation: 'select' | 'insert' | 'update' | 'delete' | 'upsert' = 'select';
+  private selectedColumns = '*';
+  private insertRows: Array<Record<string, unknown>> = [];
+  private updatePayload: Record<string, unknown> = {};
+  private filters: Filter[] = [];
+  private orderBy?: OrderBy;
+  private limitCount?: number;
+  private expectSingle = false;
+
+  constructor(
+    private table: string,
+    private store: MockDatabase
+  ) {}
+
+  select(columns: string = '*'): this {
+    this.selectedColumns = columns;
+    return this;
+  }
+
+  insert(rows: Record<string, unknown> | Array<Record<string, unknown>>): this {
+    this.operation = 'insert';
+    this.insertRows = Array.isArray(rows) ? rows : [rows];
+    return this;
+  }
+
+  upsert(rows: Record<string, unknown> | Array<Record<string, unknown>>): this {
+    this.operation = 'upsert';
+    this.insertRows = Array.isArray(rows) ? rows : [rows];
+    return this;
+  }
+
+  update(payload: Record<string, unknown>): this {
+    this.operation = 'update';
+    this.updatePayload = payload;
+    return this;
+  }
+
+  delete(): this {
+    this.operation = 'delete';
+    return this;
+  }
+
+  eq(field: string, value: unknown): this {
+    this.filters.push({ type: 'eq', field, value });
+    return this;
+  }
+
+  in(field: string, values: unknown[]): this {
+    this.filters.push({ type: 'in', field, values });
+    return this;
+  }
+
+  contains(field: string, values: unknown[]): this {
+    this.filters.push({ type: 'contains', field, values });
+    return this;
+  }
+
+  order(field: string, options?: { ascending?: boolean }): this {
+    this.orderBy = { field, ascending: options?.ascending !== false };
+    return this;
+  }
+
+  limit(count: number): this {
+    this.limitCount = count;
+    return this;
+  }
+
+  single(): Promise<{ data: Record<string, unknown> | null; error: Error | null }> {
+    this.expectSingle = true;
+    return this.execute() as Promise<{ data: Record<string, unknown> | null; error: Error | null }>;
+  }
+
+  maybeSingle(): Promise<{ data: Record<string, unknown> | null; error: Error | null }> {
+    this.expectSingle = true;
+    return this.execute(true) as Promise<{ data: Record<string, unknown> | null; error: Error | null }>;
+  }
+
+  then<TResult1 = unknown, TResult2 = never>(
+    onfulfilled?: ((value: { data: unknown; error: Error | null }) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+  ): Promise<TResult1 | TResult2> {
+    return this.execute().then(onfulfilled as any, onrejected as any);
+  }
+
+  private async execute(allowEmptySingle = false): Promise<{ data: unknown; error: Error | null }> {
+    try {
+      switch (this.operation) {
+        case 'insert':
+          return this.executeInsert();
+        case 'upsert':
+          return this.executeUpsert();
+        case 'update':
+          return this.executeUpdate();
+        case 'delete':
+          return this.executeDelete();
+        case 'select':
+        default:
+          return this.executeSelect(allowEmptySingle);
+      }
+    } catch (error) {
+      return {
+        data: this.expectSingle ? null : [],
+        error: error instanceof Error ? error : new Error('Mock query failed'),
+      };
+    }
+  }
+
+  private getTableRows(): Array<Record<string, unknown>> {
+    return this.store.getCollection(this.table);
+  }
+
+  private matchesFilters(row: Record<string, unknown>): boolean {
+    return this.filters.every((filter) => {
+      const fieldValue = row[filter.field];
+      if (filter.type === 'eq') {
+        return fieldValue === filter.value;
+      }
+      if (filter.type === 'in') {
+        return filter.values.includes(fieldValue);
+      }
+      if (filter.type === 'contains') {
+        if (!Array.isArray(fieldValue)) return false;
+        return filter.values.every((v) => fieldValue.includes(v));
+      }
+      return true;
+    });
+  }
+
+  private applySelectColumns(row: Record<string, unknown>): Record<string, unknown> {
+    if (!this.selectedColumns || this.selectedColumns.trim() === '*') {
+      return row;
+    }
+
+    const keys = this.selectedColumns.split(',').map((k) => k.trim()).filter(Boolean);
+    const selected: Record<string, unknown> = {};
+    for (const key of keys) {
+      selected[key] = row[key];
+    }
+    return selected;
+  }
+
+  private async executeSelect(allowEmptySingle: boolean): Promise<{ data: unknown; error: Error | null }> {
+    let rows = this.getTableRows().filter((row) => this.matchesFilters(row));
+
+    if (this.orderBy) {
+      const { field, ascending } = this.orderBy;
+      rows = [...rows].sort((a, b) => {
+        const aVal = a[field];
+        const bVal = b[field];
+        const cmp = aVal === bVal ? 0 : aVal! > bVal! ? 1 : -1;
+        return ascending ? cmp : -cmp;
+      });
+    }
+
+    if (typeof this.limitCount === 'number') {
+      rows = rows.slice(0, this.limitCount);
+    }
+
+    if (this.expectSingle) {
+      if (rows.length === 0) {
+        return { data: null, error: allowEmptySingle ? null : new Error('No rows found') };
+      }
+      return { data: this.applySelectColumns(rows[0]), error: null };
+    }
+
+    return { data: rows.map((row) => this.applySelectColumns(row)), error: null };
+  }
+
+  private async executeInsert(): Promise<{ data: unknown; error: Error | null }> {
+    const insertedRows = this.insertRows.map((row) => {
+      const id = (row.id as string | undefined) || this.store.generateId();
+      const createdAt = new Date(Date.now() + mockSupabaseTimestampOffset++).toISOString();
+      const normalized = {
+        ...row,
+        id,
+        created_at: row.created_at || createdAt,
+        updated_at: row.updated_at || createdAt,
+      };
+      this.store.setData(`${this.table}/${id}`, normalized as Record<string, unknown>);
+      return normalized;
+    });
+
+    if (this.expectSingle) {
+      return { data: this.applySelectColumns(insertedRows[0]), error: null };
+    }
+    return { data: insertedRows.map((row) => this.applySelectColumns(row)), error: null };
+  }
+
+  private async executeUpsert(): Promise<{ data: unknown; error: Error | null }> {
+    const upsertedRows = this.insertRows.map((row) => {
+      const explicitId = row.id as string | undefined;
+      const existingById = explicitId ? this.store.getData(`${this.table}/${explicitId}`) : null;
+      const existing = existingById ?? null;
+      const id = explicitId || String(existing?.id ?? this.store.generateId());
+      const now = new Date(Date.now() + mockSupabaseTimestampOffset++).toISOString();
+
+      const normalized = {
+        ...(existing || {}),
+        ...row,
+        id,
+        created_at: (existing?.created_at as string | undefined) || (row.created_at as string | undefined) || now,
+        updated_at: (row.updated_at as string | undefined) || now,
+      };
+
+      this.store.setData(`${this.table}/${id}`, normalized as Record<string, unknown>);
+      return normalized;
+    });
+
+    if (this.expectSingle) {
+      return { data: this.applySelectColumns(upsertedRows[0]), error: null };
+    }
+    return { data: upsertedRows.map((row) => this.applySelectColumns(row)), error: null };
+  }
+
+  private async executeUpdate(): Promise<{ data: unknown; error: Error | null }> {
+    const rows = this.getTableRows().filter((row) => this.matchesFilters(row));
+    const updatedRows = rows.map((row) => {
+      const id = String(row.id);
+      const next = {
+        ...row,
+        ...this.updatePayload,
+        updated_at: new Date().toISOString(),
+      };
+      this.store.setData(`${this.table}/${id}`, next as Record<string, unknown>);
+      return next;
+    });
+
+    if (this.expectSingle) {
+      return { data: updatedRows[0] || null, error: updatedRows.length ? null : new Error('No rows found') };
+    }
+    return { data: updatedRows, error: null };
+  }
+
+  private async executeDelete(): Promise<{ data: unknown; error: Error | null }> {
+    const rows = this.getTableRows().filter((row) => this.matchesFilters(row));
+    for (const row of rows) {
+      const id = String(row.id);
+      this.store.deleteData(`${this.table}/${id}`);
+    }
+    return { data: null, error: null };
+  }
+}
+
+class MockSupabaseBrowserClient {
+  constructor(private store: MockDatabase) {}
+
+  from(table: string): MockSupabaseTableQuery {
+    return new MockSupabaseTableQuery(table, this.store);
+  }
+
+  channel(name: string) {
+    return {
+      on: () => this.channel(name),
+      subscribe: () => ({ name }),
+    };
+  }
+
+  removeChannel(_channel?: unknown): void {
+    // no-op for tests
+  }
+}
+
+// ============================================================
 // Mock Auth
 // ============================================================
 
@@ -517,6 +803,12 @@ export class MockAuth {
     this.error = error;
   }
 
+  consumeError(): Error | null {
+    const current = this.error;
+    this.error = null;
+    return current;
+  }
+
   clear(): void {
     this.currentUser = null;
     this.listeners.clear();
@@ -530,6 +822,7 @@ export class MockAuth {
 
 export const mockDatabase = new MockDatabase();
 export const mockAuth = new MockAuth();
+export const mockSupabaseBrowserClient = new MockSupabaseBrowserClient(mockDatabase);
 
 // ============================================================
 // Jest Mock Factory
@@ -539,6 +832,7 @@ export function createSupabaseMock() {
   return {
     auth: mockAuth,
     db: mockDatabase,
+    getSupabaseBrowserClient: () => mockSupabaseBrowserClient,
     Timestamp: MockTimestamp,
   };
 }
@@ -547,4 +841,5 @@ export function createSupabaseMock() {
 export function resetSupabaseMocks(): void {
   mockDatabase.clear();
   mockAuth.clear();
+  mockSupabaseTimestampOffset = 0;
 }

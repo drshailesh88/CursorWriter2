@@ -280,7 +280,7 @@ export async function searchSemanticScholar(query: SearchQuery): Promise<SearchR
       total: data.total,
       source: 'semantic-scholar',
       query,
-      executionTimeMs: Date.now() - startTime,
+      executionTimeMs: Math.max(1, Date.now() - startTime),
     };
   } catch (error) {
     console.error('Semantic Scholar search error:', error);
@@ -321,7 +321,24 @@ export async function getSemanticScholarById(paperId: string): Promise<SearchRes
  * Get paper by DOI
  */
 export async function getByDOI(doi: string): Promise<SearchResult | null> {
-  return getSemanticScholarById(`DOI:${doi}`);
+  const cleanDoi = doi.replace('https://doi.org/', '');
+  const paperId = `DOI:${cleanDoi}`;
+  const url = new URL(`${API_BASE}/paper/${paperId}`);
+  url.searchParams.set('fields', PAPER_FIELDS);
+
+  try {
+    const response = await fetch(url.toString(), {
+      headers: getHeaders(),
+    });
+
+    if (!response.ok) return null;
+
+    const paper: SemanticScholarPaper = await response.json();
+    setCache(paperCache, paperId, paper);
+    return toSearchResult(paper);
+  } catch {
+    return null;
+  }
 }
 
 /**

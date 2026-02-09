@@ -379,7 +379,7 @@ Treatment demonstrated a 34% improvement (95% CI: 28-40%, p < 0.001).
       const findings = identifyKeyFindings(sections);
 
       expect(findings[0]?.supportingData).toBeTruthy();
-      expect(findings[0]?.supportingData.length).toBeGreaterThan(0);
+      expect((findings[0]?.supportingData?.length ?? 0)).toBeGreaterThan(0);
     });
 
     it('should handle sections without findings', () => {

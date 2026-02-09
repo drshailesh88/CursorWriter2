@@ -75,6 +75,7 @@ interface EngineSession {
   // Control
   isPaused: boolean;
   isCancelled: boolean;
+  isExecuting: boolean;
   awaitingClarification: boolean;
   pendingQuestions: ClarifyingQuestion[];
 }
@@ -155,6 +156,7 @@ export class ResearchEngine extends EventEmitter {
       synthesis: null,
       isPaused: false,
       isCancelled: false,
+      isExecuting: false,
       awaitingClarification: false,
       pendingQuestions: [],
     };
@@ -181,6 +183,17 @@ export class ResearchEngine extends EventEmitter {
       throw new Error('Session is awaiting clarification answers');
     }
 
+    // Prevent duplicate execution from multiple SSE connections
+    if (session.isExecuting) {
+      return;
+    }
+
+    // Don't re-execute completed or errored sessions
+    if (session.status === 'complete' || session.status === 'error') {
+      return;
+    }
+
+    session.isExecuting = true;
     session.isPaused = false;
 
     try {
@@ -193,6 +206,8 @@ export class ResearchEngine extends EventEmitter {
         recoverable: false,
       } as EngineEvent);
       session.status = 'error';
+    } finally {
+      session.isExecuting = false;
     }
   }
 

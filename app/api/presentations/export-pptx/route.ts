@@ -4,6 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveApiUser, authErrorResponse } from '@/lib/supabase/api-auth';
 import type {
   Slide,
   Theme,
@@ -44,6 +45,11 @@ interface ExportPptxRequest {
 // ============================================================================
 
 export async function POST(request: NextRequest) {
+  const authResult = await resolveApiUser(request);
+  if (!authResult.userId) {
+    return authErrorResponse(authResult);
+  }
+
   try {
     const body: ExportPptxRequest = await request.json();
     const { presentation, options = {} } = body;

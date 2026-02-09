@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveApiUser, authErrorResponse } from '@/lib/supabase/api-auth';
 import { anthropic } from '@ai-sdk/anthropic';
 import { generateText } from 'ai';
 import type { Slide, SlideContent } from '@/lib/presentations/types';
@@ -237,6 +238,11 @@ function extractSlideUpdateFromChat(
 // ============================================================================
 
 export async function POST(request: NextRequest) {
+  const authResult = await resolveApiUser(request);
+  if (!authResult.userId) {
+    return authErrorResponse(authResult);
+  }
+
   try {
     const body = (await request.json()) as AIAssistRequest;
     const { action, slide, themeId, newLayout, message, history } = body;

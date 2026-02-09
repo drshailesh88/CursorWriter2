@@ -14,9 +14,8 @@ import { renderHook, waitFor, act } from '@testing-library/react';
 import { mockAuth, mockDatabase, resetSupabaseMocks } from '../../mocks/supabase';
 import { createMockUser, createMockDocument } from '../../mocks/test-data';
 import { useDocument } from '@/lib/hooks/use-document';
+import * as documentOps from '@/lib/supabase/documents';
 import { createDocument, getDocument } from '@/lib/supabase/documents';
-
-const updateDoc = vi.fn();
 
 // Mock toast notifications - define factory inline to avoid hoisting issues
 vi.mock('sonner', () => ({
@@ -377,9 +376,8 @@ describe('Auto-Save Functionality', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      // Mock updateDoc to throw an error
-      const updateDocMock = vi.mocked(updateDoc);
-      updateDocMock.mockRejectedValueOnce(new Error('Save failed'));
+      // Mock saveDocumentContent to throw an error
+      const saveSpy = vi.spyOn(documentOps, 'saveDocumentContent').mockRejectedValueOnce(new Error('Save failed'));
 
       await act(async () => {
         result.current.setContent('<p>Test</p>');
@@ -391,6 +389,7 @@ describe('Auto-Save Functionality', () => {
       }, { timeout: 2000 });
 
       expect(result.current.error?.message).toBe('Save failed');
+      saveSpy.mockRestore();
 
       // Restore fake timers for subsequent tests
       vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -611,9 +610,8 @@ describe('Auto-Save Functionality', () => {
         expect(result.current.loading).toBe(false);
       });
 
-      // Mock updateDoc to throw an error
-      const updateDocMock = vi.mocked(updateDoc);
-      updateDocMock.mockRejectedValueOnce(new Error('Network error'));
+      // Mock saveDocumentContent to throw an error
+      const saveSpy = vi.spyOn(documentOps, 'saveDocumentContent').mockRejectedValueOnce(new Error('Network error'));
 
       await act(async () => {
         result.current.setContent('<p>Test</p>');
@@ -625,6 +623,7 @@ describe('Auto-Save Functionality', () => {
       }, { timeout: 2000 });
 
       // Restore fake timers for subsequent tests
+      saveSpy.mockRestore();
       vi.useFakeTimers({ shouldAdvanceTime: true });
     });
 
@@ -641,8 +640,7 @@ describe('Auto-Save Functionality', () => {
       });
 
       // First save fails
-      const updateDocMock = vi.mocked(updateDoc);
-      updateDocMock.mockRejectedValueOnce(new Error('Network error'));
+      const saveSpy = vi.spyOn(documentOps, 'saveDocumentContent').mockRejectedValueOnce(new Error('Network error'));
 
       await act(async () => {
         result.current.setContent('<p>First attempt</p>');
@@ -668,6 +666,7 @@ describe('Auto-Save Functionality', () => {
       expect(savedDoc?.content).toBe('<p>Second attempt</p>');
 
       // Restore fake timers for subsequent tests
+      saveSpy.mockRestore();
       vi.useFakeTimers({ shouldAdvanceTime: true });
     });
 

@@ -99,7 +99,24 @@ export async function getComments(documentId: string): Promise<Comment[]> {
 export async function updateComment(
   commentId: string,
   updates: UpdateCommentData
+): Promise<void>;
+export async function updateComment(
+  documentId: string,
+  commentId: string,
+  updates: UpdateCommentData
+): Promise<void>;
+export async function updateComment(
+  arg1: string,
+  arg2: string | UpdateCommentData,
+  arg3?: UpdateCommentData
 ): Promise<void> {
+  const commentId = typeof arg2 === 'string' ? arg2 : arg1;
+  const updates = (typeof arg2 === 'string' ? arg3 : arg2) as UpdateCommentData;
+
+  if (!updates) {
+    throw new Error('Updates are required');
+  }
+
   try {
     const supabase = getSupabaseBrowserClient();
     const payload: Record<string, unknown> = {};
@@ -123,7 +140,10 @@ export async function updateComment(
   }
 }
 
-export async function deleteComment(commentId: string): Promise<void> {
+export async function deleteComment(documentId: string, commentId: string): Promise<void>;
+export async function deleteComment(commentId: string): Promise<void>;
+export async function deleteComment(arg1: string, arg2?: string): Promise<void> {
+  const commentId = arg2 || arg1;
   try {
     const supabase = getSupabaseBrowserClient();
     const { error } = await supabase.from('document_comments').delete().eq('id', commentId);
@@ -138,7 +158,15 @@ export async function deleteComment(commentId: string): Promise<void> {
   }
 }
 
-export async function resolveComment(commentId: string, resolved: boolean): Promise<void> {
+export async function resolveComment(commentId: string, resolved?: boolean): Promise<void>;
+export async function resolveComment(documentId: string, commentId: string, resolved?: boolean): Promise<void>;
+export async function resolveComment(
+  arg1: string,
+  arg2?: string | boolean,
+  arg3?: boolean
+): Promise<void> {
+  const commentId = typeof arg2 === 'string' ? arg2 : arg1;
+  const resolved = typeof arg2 === 'string' ? (arg3 ?? true) : (arg2 ?? true);
   return updateComment(commentId, { resolved });
 }
 
@@ -195,14 +223,21 @@ export function subscribeToComments(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'document_comments', filter: `document_id=eq.${documentId}` },
       async () => {
-        const comments = await getComments(documentId);
-        callback(comments);
+        try {
+          const comments = await getComments(documentId);
+          callback(comments);
+        } catch (error) {
+          console.error('Error fetching comments in subscription:', error);
+        }
       }
     )
-    .subscribe();
+    .subscribe((status: string) => {
+      if (status === 'CHANNEL_ERROR') {
+        console.error(`Comments subscription error for document ${documentId}`);
+      }
+    });
 
   return () => {
     supabase.removeChannel(channel);
   };
 }
-

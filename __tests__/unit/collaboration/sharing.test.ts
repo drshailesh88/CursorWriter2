@@ -11,7 +11,7 @@
  */
 
 import { describe, test, expect, beforeEach, vi } from 'vitest';
-import { mockDatabase, resetSupabaseMocks } from '../../mocks/supabase';
+import { mockDatabase, resetSupabaseMocks, mockSupabaseBrowserClient } from '../../mocks/supabase';
 import { createMockUser, createMockDocument } from '../../mocks/test-data';
 import type { DocumentShare, SharePermission } from '@/lib/collaboration/types';
 
@@ -25,6 +25,7 @@ vi.stubGlobal('crypto', {
 // Mock the Supabase client module
 vi.mock('@/lib/supabase/client', () => ({
   db: () => mockDatabase,
+  getSupabaseBrowserClient: () => mockSupabaseBrowserClient,
 }));
 
 vi.mock('@/lib/supabase/schema', () => ({
@@ -509,7 +510,7 @@ describe('Document Sharing', () => {
       expect(token1).not.toBe(token2);
 
       // Reset mock
-      global.crypto.randomUUID = mockRandomUUID;
+      global.crypto.randomUUID = mockRandomUUID as unknown as typeof global.crypto.randomUUID;
     });
 
     test('inactive shares cannot be validated', async () => {
@@ -545,19 +546,12 @@ describe('Document Sharing', () => {
       // Validate the expired token
       await validateShareToken(token);
 
-      // Check that it was marked as inactive
-      const sharesRef = mockDatabase.collection(`documents/${testDocId}/shares`);
-      const snapshot = await sharesRef.get();
+      // Check that it was marked as inactive in the Supabase-style table
+      const shareRows = mockDatabase.getCollection('document_shares');
+      const matchingShare = shareRows.find((row) => row.share_token === token);
 
-      let foundShare = false;
-      snapshot.forEach((doc: any) => {
-        if (doc.data().shareToken === token) {
-          foundShare = true;
-          expect(doc.data().active).toBe(false);
-        }
-      });
-
-      expect(foundShare).toBe(true);
+      expect(matchingShare).toBeDefined();
+      expect(matchingShare?.active).toBe(false);
     });
   });
 

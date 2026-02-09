@@ -1,7 +1,9 @@
+import { NextRequest } from 'next/server';
 import { streamText } from 'ai';
 import { openai, createOpenAI } from '@ai-sdk/openai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { google } from '@ai-sdk/google';
+import { resolveApiUser, authErrorResponse } from '@/lib/supabase/api-auth';
 import {
   buildWritingPrompt,
   type AIWritingAction,
@@ -26,7 +28,12 @@ const MODEL_MAP = {
 // Use a fast, capable model by default for writing tasks
 const DEFAULT_MODEL = 'anthropic';
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const authResult = await resolveApiUser(req);
+  if (!authResult.userId) {
+    return authErrorResponse(authResult);
+  }
+
   try {
     const body = await req.json();
     const {

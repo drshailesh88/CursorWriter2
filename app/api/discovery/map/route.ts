@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { generateMap, detectGaps } from '@/lib/discovery/knowledge-map';
+import { generateMap, generateMapFromPapers, detectGaps } from '@/lib/discovery/knowledge-map';
 import type { MapConfig } from '@/lib/discovery/types';
 
 /**
@@ -49,17 +49,18 @@ export async function POST(req: NextRequest) {
 
     const { topic, paperIds, ...config } = validationResult.data;
 
-    // For now, we only support topic-based maps
-    // TODO: Support paperIds-based maps in future
-    if (!topic) {
+    // Generate knowledge map from either topic or paperIds
+    let map;
+    if (topic) {
+      map = await generateMap(topic, config as Partial<MapConfig>);
+    } else if (paperIds && paperIds.length > 0) {
+      map = await generateMapFromPapers(paperIds, config as Partial<MapConfig>);
+    } else {
       return NextResponse.json(
-        { error: 'Topic parameter is required (paperIds-based maps not yet implemented)' },
+        { error: 'Either topic or paperIds must be provided' },
         { status: 400 }
       );
     }
-
-    // Generate knowledge map
-    const map = await generateMap(topic, config as Partial<MapConfig>);
 
     // Detect research gaps
     const gaps = detectGaps(map);

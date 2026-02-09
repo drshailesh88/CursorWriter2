@@ -484,7 +484,13 @@ describe('Multi-Paper Comparison → Summary → Insert', () => {
       title: 'Study Comparison',
       template: 'clinical_trial',
       paperIds: ['p1', 'p2', 'p3'],
-      columns: template.columns,
+      columns: template.columns.map((column) => ({
+        id: column.id,
+        name: column.name,
+        type: column.type === 'number' || column.type === 'boolean' ? column.type : 'text',
+        extractionPrompt: column.extractionPrompt,
+        width: 180,
+      })),
       rows: [
         {
           paperId: 'p1',

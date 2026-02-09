@@ -7,6 +7,7 @@ import {
   addSessionSources,
   setSessionSynthesis,
 } from '@/lib/supabase/research-sessions-admin';
+import { resolveApiUser, authErrorResponse } from '@/lib/supabase/api-auth';
 
 /**
  * GET /api/research/[sessionId]/stream - SSE stream for real-time progress
@@ -19,12 +20,18 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { sessionId: string } }
 ) {
+  const authResult = await resolveApiUser(request);
+  if (!authResult.userId) {
+    return authErrorResponse(authResult);
+  }
+  const userId = authResult.userId;
+
   const { sessionId } = params;
   const encoder = new TextEncoder();
 
   // Check if session exists
   const session = researchEngine.getSession(sessionId);
-  if (!session) {
+  if (!session || session.userId !== userId) {
     return new Response(
       JSON.stringify({ error: 'Session not found' }),
       { status: 404, headers: { 'Content-Type': 'application/json' } }

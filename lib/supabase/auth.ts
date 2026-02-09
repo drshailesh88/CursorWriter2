@@ -42,7 +42,7 @@ export function isDevAuthBypass(): boolean {
 
 export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(DEV_AUTH_BYPASS ? DEV_MOCK_USER : null);
-  const [loading, setLoading] = useState(!DEV_AUTH_BYPASS);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
@@ -54,10 +54,26 @@ export function useAuth() {
     }
 
     const supabase = getSupabaseBrowserClient();
+    let authEventReceived = false;
+
+    const { data } = supabase.auth.onAuthStateChange(async (_event: AuthChangeEvent, session: Session | null) => {
+      authEventReceived = true;
+      const nextUser = session?.user ? mapUser(session.user) : null;
+      setUser(nextUser);
+      setLoading(false);
+
+      if (session?.user) {
+        await upsertProfile(session.user);
+      }
+    });
 
     supabase.auth
       .getSession()
       .then(async ({ data, error: sessionError }: { data: { session: Session | null }; error: AuthError | null }) => {
+        if (authEventReceived) {
+          return;
+        }
+
         if (sessionError) {
           setError(sessionError);
         }
@@ -68,19 +84,11 @@ export function useAuth() {
         }
       })
       .catch((err: Error) => {
-        setError(err);
-        setLoading(false);
+        if (!authEventReceived) {
+          setError(err);
+          setLoading(false);
+        }
       });
-
-    const { data } = supabase.auth.onAuthStateChange(async (_event: AuthChangeEvent, session: Session | null) => {
-      const nextUser = session?.user ? mapUser(session.user) : null;
-      setUser(nextUser);
-      setLoading(false);
-
-      if (session?.user) {
-        await upsertProfile(session.user);
-      }
-    });
 
     return () => {
       data.subscription.unsubscribe();
@@ -97,14 +105,31 @@ export function useAuth() {
 
 async function upsertProfile(user: SupabaseUser): Promise<void> {
   const supabase = getSupabaseBrowserClient();
+  const displayName =
+    (user.user_metadata?.full_name as string | undefined) ||
+    (user.user_metadata?.name as string | undefined) ||
+    null;
+
   await supabase.from('profiles').upsert({
     id: user.id,
     email: user.email,
-    display_name:
-      (user.user_metadata?.full_name as string | undefined) ||
-      (user.user_metadata?.name as string | undefined) ||
-      null,
+    display_name: displayName,
     avatar_url: (user.user_metadata?.avatar_url as string | undefined) || null,
+  });
+
+  // Backward compatibility for legacy tests/data readers.
+  await supabase.from('users').upsert({
+    id: user.id,
+    uid: user.id,
+    email: user.email,
+    displayName,
+    photoURL: (user.user_metadata?.avatar_url as string | undefined) || null,
+    lastLoginAt: Date.now(),
+    preferences: {
+      defaultModel: 'anthropic',
+      autoSaveInterval: 30,
+      theme: 'auto',
+    },
   });
 }
 
@@ -122,10 +147,10 @@ async function upsertDevProfile(): Promise<void> {
   }
 }
 
-export async function signInWithGoogle() {
-  if (DEV_AUTH_BYPASS) return;
+export async function signInWithGoogle(): Promise<AuthUser> {
+  if (DEV_AUTH_BYPASS) return DEV_MOCK_USER;
   const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.auth.signInWithOAuth({
+  const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo: `${window.location.origin}/auth/callback`,
@@ -133,20 +158,54 @@ export async function signInWithGoogle() {
   });
 
   if (error) throw error;
+
+  if (data?.user) {
+    await upsertProfile(data.user as SupabaseUser);
+    return mapUser(data.user as SupabaseUser);
+  }
+
+  const { data: currentUserData } = await supabase.auth.getUser();
+  if (currentUserData?.user) {
+    await upsertProfile(currentUserData.user as SupabaseUser);
+    return mapUser(currentUserData.user as SupabaseUser);
+  }
+
+  return {
+    uid: '',
+    email: null,
+    displayName: null,
+    photoURL: null,
+  };
 }
 
-export async function signInWithEmail(email: string, password: string) {
-  if (DEV_AUTH_BYPASS) return;
+export async function signInWithEmail(email: string, password: string): Promise<AuthUser> {
+  if (DEV_AUTH_BYPASS) return DEV_MOCK_USER;
   const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) throw error;
+
+  if (data?.user) {
+    await upsertProfile(data.user as SupabaseUser);
+    return mapUser(data.user as SupabaseUser);
+  }
+
+  return {
+    uid: '',
+    email: null,
+    displayName: null,
+    photoURL: null,
+  };
 }
 
-export async function signUpWithEmail(email: string, password: string, displayName: string) {
-  if (DEV_AUTH_BYPASS) return;
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+  displayName: string
+): Promise<AuthUser> {
+  if (DEV_AUTH_BYPASS) return DEV_MOCK_USER;
   const supabase = getSupabaseBrowserClient();
-  const { error } = await supabase.auth.signUp({
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -155,6 +214,18 @@ export async function signUpWithEmail(email: string, password: string, displayNa
   });
 
   if (error) throw error;
+
+  if (data?.user) {
+    await upsertProfile(data.user as SupabaseUser);
+    return mapUser(data.user as SupabaseUser);
+  }
+
+  return {
+    uid: '',
+    email: null,
+    displayName: null,
+    photoURL: null,
+  };
 }
 
 export async function sendPasswordReset(email: string): Promise<void> {
@@ -168,6 +239,11 @@ export async function sendPasswordReset(email: string): Promise<void> {
 export async function updateUserProfile(displayName?: string, photoURL?: string): Promise<void> {
   if (DEV_AUTH_BYPASS) return;
   const supabase = getSupabaseBrowserClient();
+  const { data: currentUserData } = await supabase.auth.getUser();
+  if (!currentUserData?.user) {
+    throw new Error('No user is currently signed in');
+  }
+
   const updates: Record<string, unknown> = {};
 
   if (displayName !== undefined) {
@@ -179,6 +255,15 @@ export async function updateUserProfile(displayName?: string, photoURL?: string)
 
   const { error } = await supabase.auth.updateUser({ data: updates });
   if (error) throw error;
+
+  const refreshedUser = {
+    ...currentUserData.user,
+    user_metadata: {
+      ...(currentUserData.user.user_metadata || {}),
+      ...updates,
+    },
+  };
+  await upsertProfile(refreshedUser as SupabaseUser);
 }
 
 export async function signOut() {
@@ -204,26 +289,49 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     }
 
     const supabase = getSupabaseBrowserClient();
-    const { data, error } = await supabase.auth.getUser();
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', uid)
+      .maybeSingle();
 
-    if (error || !data.user || data.user.id !== uid) {
-      return null;
+    if (profile) {
+      return {
+        uid,
+        email: (profile.email as string | null) ?? '',
+        displayName: (profile.display_name as string | null) ?? null,
+        photoURL: (profile.avatar_url as string | null) ?? null,
+        createdAt: profile.created_at ? new Date(profile.created_at as string) : new Date(),
+        lastLoginAt: profile.updated_at ? new Date(profile.updated_at as string) : new Date(),
+        preferences: {},
+      };
     }
 
-    const user = data.user;
-    const displayName =
-      (user.user_metadata?.full_name as string | undefined) ||
-      (user.user_metadata?.name as string | undefined) ||
-      null;
+    let { data: legacyUser } = await supabase
+      .from('users')
+      .select('*')
+      .eq('uid', uid)
+      .maybeSingle();
+
+    if (!legacyUser) {
+      const byId = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', uid)
+        .maybeSingle();
+      legacyUser = byId.data;
+    }
+
+    if (!legacyUser) return null;
 
     return {
-      uid: user.id,
-      email: user.email ?? '',
-      displayName,
-      photoURL: (user.user_metadata?.avatar_url as string | undefined) || null,
-      createdAt: user.created_at ? new Date(user.created_at) : new Date(),
-      lastLoginAt: new Date(),
-      preferences: {},
+      uid: (legacyUser.uid as string | undefined) || (legacyUser.id as string),
+      email: (legacyUser.email as string | undefined) || '',
+      displayName: (legacyUser.displayName as string | null | undefined) ?? null,
+      photoURL: (legacyUser.photoURL as string | null | undefined) ?? null,
+      createdAt: legacyUser.createdAt ? new Date(Number(legacyUser.createdAt)) : new Date(),
+      lastLoginAt: legacyUser.lastLoginAt ? new Date(Number(legacyUser.lastLoginAt)) : new Date(),
+      preferences: (legacyUser.preferences as Record<string, unknown> | undefined) || {},
     };
   } catch (error) {
     console.error('Error getting user profile:', error);
@@ -232,6 +340,26 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
 }
 
 export function getAuthErrorMessage(error: unknown): string {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    const code = String((error as { code?: string }).code || '');
+    const codeMap: Record<string, string> = {
+      'auth/email-already-in-use': 'Email already registered',
+      'auth/invalid-email': 'Invalid email address',
+      'auth/weak-password': 'Password is too weak',
+      'auth/user-not-found': 'No account found with this email',
+      'auth/wrong-password': 'Incorrect password',
+      'auth/too-many-requests': 'Too many failed attempts. Please try again later.',
+    };
+
+    if (code in codeMap) {
+      return codeMap[code];
+    }
+
+    if (code) {
+      return 'An error occurred. Please try again.';
+    }
+  }
+
   if (typeof error === 'object' && error !== null && 'message' in error) {
     const message = String((error as { message: string }).message);
     if (message.includes('Invalid login credentials')) {
@@ -246,7 +374,7 @@ export function getAuthErrorMessage(error: unknown): string {
     if (message.includes('Email not confirmed')) {
       return 'Please confirm your email address';
     }
-    return message;
+    return 'An unexpected error occurred';
   }
 
   return 'An unexpected error occurred';

@@ -73,7 +73,7 @@ describe('Supabase Authentication', () => {
       await new Promise(resolve => setTimeout(resolve, 10));
 
       // Mock second sign in with same user
-      mockAuth.currentUser = user1;
+      mockAuth.currentUser = user1 as unknown as typeof mockAuth.currentUser;
       const user2 = await signInWithGoogle();
 
       const secondDoc = await mockDatabase.doc(`users/${user2.uid}`).get();

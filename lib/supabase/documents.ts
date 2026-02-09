@@ -34,6 +34,19 @@ function mapDocument(row: DocumentRow): Document {
   };
 }
 
+async function ensureDocumentExists(documentId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  const { data, error } = await supabase
+    .from('documents')
+    .select('id')
+    .eq('id', documentId)
+    .maybeSingle();
+
+  if (error || !data) {
+    throw new Error('Document not found');
+  }
+}
+
 // Create a new document
 export async function createDocument(
   userId: string,
@@ -87,6 +100,8 @@ export async function updateDocument(
   updates: Partial<Document>
 ): Promise<void> {
   try {
+    await ensureDocumentExists(documentId);
+
     const supabase = getSupabaseBrowserClient();
     const payload: Record<string, unknown> = {};
 
@@ -120,6 +135,8 @@ export async function saveDocumentContent(
   wordCount: number
 ): Promise<void> {
   try {
+    await ensureDocumentExists(documentId);
+
     const supabase = getSupabaseBrowserClient();
     const { error } = await supabase
       .from('documents')

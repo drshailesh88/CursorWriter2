@@ -13,6 +13,7 @@ import {
   removePaperTags,
   getPaperContent,
 } from '@/lib/supabase/papers';
+import { resolveApiUser, authErrorResponse } from '@/lib/supabase/api-auth';
 
 interface RouteParams {
   params: Promise<{ paperId: string }>;
@@ -27,9 +28,16 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { paperId } = await params;
     const { searchParams } = new URL(request.url);
     const includeContent = searchParams.get('content') === 'true';
+    const requestedUserId = searchParams.get('userId');
+
+    const authResult = await resolveApiUser(request, { requestedUserId });
+    if (!authResult.userId) {
+      return authErrorResponse(authResult);
+    }
+    const userId = authResult.userId;
 
     const paper = await getPaper(paperId);
-    if (!paper) {
+    if (!paper || paper.userId !== userId) {
       return NextResponse.json(
         { error: 'Paper not found' },
         { status: 404 }
@@ -58,6 +66,21 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const { paperId } = await params;
+    const { searchParams } = new URL(request.url);
+    const requestedUserId = searchParams.get('userId');
+    const authResult = await resolveApiUser(request, { requestedUserId });
+    if (!authResult.userId) {
+      return authErrorResponse(authResult);
+    }
+
+    const paper = await getPaper(paperId);
+    if (!paper || paper.userId !== authResult.userId) {
+      return NextResponse.json(
+        { error: 'Paper not found' },
+        { status: 404 }
+      );
+    }
+
     const body = await request.json();
     const { action, ...updates } = body;
 
@@ -96,6 +119,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { paperId } = await params;
+    const { searchParams } = new URL(request.url);
+    const requestedUserId = searchParams.get('userId');
+    const authResult = await resolveApiUser(request, { requestedUserId });
+    if (!authResult.userId) {
+      return authErrorResponse(authResult);
+    }
+
+    const paper = await getPaper(paperId);
+    if (!paper || paper.userId !== authResult.userId) {
+      return NextResponse.json(
+        { error: 'Paper not found' },
+        { status: 404 }
+      );
+    }
 
     await deletePaper(paperId);
 

@@ -45,6 +45,8 @@ class KnowledgeMapBuilder {
       title: p.title,
       authors: p.authors,
       year: p.year,
+      source: 'semantic-scholar',
+      url: `https://example.org/${p.id}`,
       citationCount: p.citationCount,
       referenceCount: p.referenceCount,
       abstract: p.abstract || '',
@@ -108,8 +110,8 @@ class KnowledgeMapBuilder {
       papers: mapPapers,
       connections,
       config,
-      createdAt: MockTimestamp.now(),
-      updatedAt: MockTimestamp.now(),
+      createdAt: MockTimestamp.timestampNow(),
+      updatedAt: MockTimestamp.timestampNow(),
     };
   }
 
@@ -122,6 +124,8 @@ class KnowledgeMapBuilder {
       title: p.title,
       authors: p.authors,
       year: p.year,
+      source: 'semantic-scholar',
+      url: `https://example.org/${p.id}`,
       citationCount: p.citationCount,
       referenceCount: p.referenceCount,
       abstract: p.abstract || '',
@@ -478,8 +482,8 @@ describe('KnowledgeMapBuilder', () => {
         papers: [],
         connections: [],
         config: mockConfig,
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.timestampNow(),
+        updatedAt: MockTimestamp.timestampNow(),
       };
 
       const gaps = await builder.detectGaps(mockMap);
@@ -512,8 +516,8 @@ describe('KnowledgeMapBuilder', () => {
         papers: [],
         connections: [],
         config: mockConfig,
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.timestampNow(),
+        updatedAt: MockTimestamp.timestampNow(),
       };
 
       const gaps = await builder.detectGaps(mockMap);
@@ -558,8 +562,8 @@ describe('KnowledgeMapBuilder', () => {
         papers: [],
         connections: [],
         config: mockConfig,
-        createdAt: MockTimestamp.now(),
-        updatedAt: MockTimestamp.now(),
+        createdAt: MockTimestamp.timestampNow(),
+        updatedAt: MockTimestamp.timestampNow(),
       };
 
       const gaps = await builder.detectGaps(mockMap);

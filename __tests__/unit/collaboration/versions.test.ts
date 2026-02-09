@@ -10,23 +10,28 @@
  */
 
 import { describe, test, expect, beforeEach, vi } from 'vitest';
-import { mockDatabase, resetSupabaseMocks } from '../../mocks/supabase';
+import { mockDatabase, resetSupabaseMocks, mockSupabaseBrowserClient } from '../../mocks/supabase';
 import { createMockUser, createMockDocument } from '../../mocks/test-data';
 import type { DocumentVersion, CreateVersionOptions } from '@/lib/collaboration/types';
 
 // Mock the Supabase client module
 vi.mock('@/lib/supabase/client', () => ({
   db: () => mockDatabase,
+  getSupabaseBrowserClient: () => mockSupabaseBrowserClient,
 }));
 
 vi.mock('@/lib/supabase/documents', () => ({
   getDocument: vi.fn(async (documentId: string) => {
     const docRef = mockDatabase.doc(`documents/${documentId}`);
     const snapshot = await docRef.get();
-    if (snapshot.exists) {
+    if (snapshot.exists()) {
       return snapshot.data();
     }
     return null;
+  }),
+  updateDocument: vi.fn(async (documentId: string, data: Record<string, unknown>) => {
+    const docRef = mockDatabase.doc(`documents/${documentId}`);
+    await docRef.update(data);
   }),
 }));
 

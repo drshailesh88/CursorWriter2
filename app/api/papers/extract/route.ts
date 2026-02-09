@@ -12,6 +12,7 @@ import { getPaper, getPaperContent } from '@/lib/supabase/papers';
 import { generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
 import type { Paper, PaperContent } from '@/lib/supabase/schema';
+import { resolveApiUser, authErrorResponse } from '@/lib/supabase/api-auth';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -20,6 +21,7 @@ type ExtractionType = 'findings' | 'methods' | 'limitations' | 'citation';
 
 interface ExtractRequest {
   paperId: string;
+  userId?: string;
   extractionType: ExtractionType;
   format?: 'text' | 'html' | 'markdown'; // Output format (default: 'markdown')
   model?: 'gpt-4o' | 'gpt-4o-mini'; // Model to use (default: 'gpt-4o-mini')
@@ -47,10 +49,16 @@ export async function POST(request: NextRequest) {
     const body: ExtractRequest = await request.json();
     const {
       paperId,
+      userId,
       extractionType,
       format = 'markdown',
       model = 'gpt-4o-mini',
     } = body;
+
+    const authResult = await resolveApiUser(request, { requestedUserId: userId });
+    if (!authResult.userId) {
+      return authErrorResponse(authResult);
+    }
 
     // Validation
     if (!paperId) {
@@ -77,7 +85,7 @@ export async function POST(request: NextRequest) {
 
     // Load paper and content
     const paper = await getPaper(paperId);
-    if (!paper) {
+    if (!paper || paper.userId !== authResult.userId) {
       return NextResponse.json(
         { error: 'Paper not found' },
         { status: 404 }

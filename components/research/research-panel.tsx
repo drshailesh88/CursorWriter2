@@ -76,9 +76,11 @@ export function ResearchPanel() {
     setMode,
     status,
     startResearch,
+    synthesis,
   } = useResearch();
 
   const [isModeOpen, setIsModeOpen] = useState(false);
+  const [showResults, setShowResults] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Focus input when entering research mode
@@ -102,6 +104,12 @@ export function ResearchPanel() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isResearchMode, status, topic, exitResearchMode, startResearch]);
+
+  useEffect(() => {
+    if (status !== 'complete') {
+      setShowResults(false);
+    }
+  }, [status]);
 
   const isResearching = status !== 'idle' && status !== 'complete';
   const currentMode = modeConfig[mode];
@@ -266,12 +274,29 @@ export function ResearchPanel() {
                     >
                       Close
                     </Button>
-                    <Button className="rounded-xl gap-2">
-                      View Results
+                    <Button
+                      className="rounded-xl gap-2"
+                      onClick={() => setShowResults((prev) => !prev)}
+                      disabled={!synthesis}
+                    >
+                      {showResults ? 'Hide Results' : 'View Results'}
                       <ArrowRight className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
+                {showResults && synthesis && (
+                  <div className="mt-4 rounded-xl border border-border bg-muted/20 p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-semibold">Synthesis Preview</h4>
+                      <span className="text-xs text-muted-foreground">
+                        {synthesis.wordCount.toLocaleString()} words
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground max-h-48 overflow-auto whitespace-pre-wrap">
+                      {synthesis.content}
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>

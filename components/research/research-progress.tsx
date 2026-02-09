@@ -57,7 +57,7 @@ const stages: Stage[] = [
 ];
 
 export function ResearchProgress() {
-  const { status, progress, currentAgent, topic } = useResearch();
+  const { status, progress, currentAgent, topic, cancelResearch } = useResearch();
 
   const currentStageIndex = stages.findIndex(s => s.id === status);
 
@@ -171,6 +171,7 @@ export function ResearchProgress() {
       {/* Cancel button */}
       <div className="mt-6 text-center">
         <button
+          onClick={cancelResearch}
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           Cancel research

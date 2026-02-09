@@ -10,32 +10,11 @@ import React from 'react';
 // Import the SlideChart component and helper functions
 // We'll test by rendering and inspecting the SVG output
 import { SlideChart } from '@/lib/presentations/visualizations/chart-renderer';
-import { ChartConfig, ChartData, Theme } from '@/lib/presentations/types';
+import { ChartConfig, ChartData } from '@/lib/presentations/types';
+import { getTheme } from '@/lib/presentations/themes';
 
 // Mock theme for testing
-const mockTheme: Theme = {
-  name: 'academic',
-  colors: {
-    background: '#ffffff',
-    surface: '#f8f9fa',
-    primary: '#8b5cf6',
-    secondary: '#06b6d4',
-    accent: '#f59e0b',
-    text: '#1f2937',
-    textMuted: '#6b7280',
-    border: '#e5e7eb',
-    chart: ['#8b5cf6', '#06b6d4', '#f59e0b', '#10b981', '#ef4444', '#6366f1', '#ec4899'],
-  },
-  fonts: {
-    heading: 'Inter, sans-serif',
-    body: 'Inter, sans-serif',
-  },
-  styles: {
-    borderRadius: 8,
-    headingWeight: 700,
-    bodyWeight: 400,
-  },
-};
+const mockTheme = getTheme('academic');
 
 describe('Chart Renderer', () => {
   describe('Bar Chart', () => {

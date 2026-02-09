@@ -210,7 +210,7 @@ export async function searchOpenAlex(query: SearchQuery): Promise<SearchResponse
       total: data.meta.count,
       source: 'openalex',
       query,
-      executionTimeMs: Date.now() - startTime,
+      executionTimeMs: Math.max(1, Date.now() - startTime),
     };
   } catch (error) {
     console.error('OpenAlex search error:', error);

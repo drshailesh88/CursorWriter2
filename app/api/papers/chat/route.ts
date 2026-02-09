@@ -5,6 +5,7 @@
 // Query → Cache Check → Hybrid Retrieve → Rerank → Model Select → LLM → Cache Store → Response
 
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveApiUser, authErrorResponse } from '@/lib/supabase/api-auth';
 
 // Force dynamic rendering (no static generation at build time)
 export const dynamic = 'force-dynamic';
@@ -31,7 +32,7 @@ interface ChatMessage {
 }
 
 interface ChatRequest {
-  userId: string;
+  userId?: string;
   paperIds: string[];
   messages: ChatMessage[];
   model?: string; // Override model selection
@@ -63,12 +64,18 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validation
-    if (!userId || !paperIds || paperIds.length === 0) {
+    if (!paperIds || paperIds.length === 0) {
       return NextResponse.json(
-        { error: 'userId and paperIds are required' },
+        { error: 'paperIds are required' },
         { status: 400 }
       );
     }
+
+    const authResult = await resolveApiUser(request, { requestedUserId: userId });
+    if (!authResult.userId) {
+      return authErrorResponse(authResult);
+    }
+    const authorizedUserId = authResult.userId;
 
     if (!messages || messages.length === 0) {
       return NextResponse.json(
@@ -87,7 +94,7 @@ export async function POST(request: NextRequest) {
 
     // Step 1: Check cache (if enabled)
     if (useCache) {
-      const cached = await getCachedResponse(userId, userQuery, paperIds);
+      const cached = await getCachedResponse(authorizedUserId, userQuery, paperIds);
       if (cached) {
         // Return cached response as non-streaming
         return NextResponse.json({
@@ -100,7 +107,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Step 2: Load paper contents
-    const papersWithContent = await loadPapersWithContent(paperIds);
+    const papersWithContent = await loadPapersWithContent(authorizedUserId, paperIds);
 
     if (papersWithContent.length === 0) {
       return NextResponse.json(
@@ -174,7 +181,7 @@ export async function POST(request: NextRequest) {
       onFinish: async ({ text }) => {
         // Cache the response (fire and forget)
         if (useCache && text) {
-          setCachedResponse(userId, userQuery, paperIds, text, citations).catch(() => {});
+          setCachedResponse(authorizedUserId, userQuery, paperIds, text, citations).catch(() => {});
         }
       },
     });
@@ -203,6 +210,7 @@ export async function POST(request: NextRequest) {
  * Load papers with their extracted content
  */
 async function loadPapersWithContent(
+  userId: string,
   paperIds: string[]
 ): Promise<Array<{ paper: Paper; content: PaperContent }>> {
   const results: Array<{ paper: Paper; content: PaperContent }> = [];
@@ -214,7 +222,7 @@ async function loadPapersWithContent(
         getPaperContent(paperId),
       ]);
 
-      if (paper && content && paper.processingStatus === 'ready') {
+      if (paper && content && paper.userId === userId && paper.processingStatus === 'ready') {
         results.push({ paper, content });
       }
     })

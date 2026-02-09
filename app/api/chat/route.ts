@@ -1,8 +1,10 @@
+import { NextRequest } from 'next/server';
 import { streamText, tool } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
+import { resolveApiUser, authErrorResponse } from '@/lib/supabase/api-auth';
 import { getSystemPrompt, type DisciplineId } from '@/lib/prompts/disciplines';
 import {
   unifiedSearch,
@@ -113,7 +115,12 @@ const MODELS_WITH_TOOL_SUPPORT = [
   'deepseek', // DeepSeek supports function calling
 ];
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const authResult = await resolveApiUser(req);
+  if (!authResult.userId) {
+    return authErrorResponse(authResult);
+  }
+
   try {
     const body = await req.json();
     console.log('[CHAT API] Received request:', JSON.stringify({ model: body.model, discipline: body.discipline, messageCount: body.messages?.length }));

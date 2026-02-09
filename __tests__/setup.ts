@@ -11,40 +11,152 @@
 import '@testing-library/jest-dom/vitest';
 import { beforeAll, afterEach, afterAll, vi, expect } from 'vitest';
 import { server } from './mocks/server';
-import { mockAuth, mockDatabase, MockTimestamp } from './mocks/supabase';
+import { mockAuth, mockDatabase, mockSupabaseBrowserClient, MockTimestamp } from './mocks/supabase';
+import { createMockUser } from './mocks/test-data';
 
-function createMockQuery() {
-  const query: any = {};
-  const noop = vi.fn(() => ({ data: null, error: null }));
-  query.select = vi.fn(() => query);
-  query.insert = vi.fn(() => ({ data: null, error: null }));
-  query.update = vi.fn(() => ({ data: null, error: null }));
-  query.upsert = vi.fn(() => ({ data: null, error: null }));
-  query.delete = vi.fn(() => ({ data: null, error: null }));
-  query.eq = vi.fn(() => query);
-  query.in = vi.fn(() => query);
-  query.order = vi.fn(() => query);
-  query.limit = vi.fn(() => query);
-  query.single = vi.fn(noop);
-  query.maybeSingle = vi.fn(noop);
-  query.contains = vi.fn(() => query);
-  query.ilike = vi.fn(() => query);
-  return query;
+process.env.NEXT_PUBLIC_SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:54321';
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'test-anon-key';
+
+function toSupabaseUser(user: typeof mockAuth.currentUser) {
+  if (!user) return null;
+  return {
+    id: user.uid,
+    email: user.email,
+    user_metadata: {
+      full_name: user.displayName,
+      avatar_url: user.photoURL,
+    },
+    created_at: new Date().toISOString(),
+  };
+}
+
+function toSession(user: typeof mockAuth.currentUser) {
+  const supabaseUser = toSupabaseUser(user);
+  if (!supabaseUser) return null;
+  return {
+    user: supabaseUser,
+  };
+}
+
+async function upsertLegacyUser(user: typeof mockAuth.currentUser): Promise<void> {
+  if (!user) return;
+  const path = `users/${user.uid}`;
+  const existing = mockDatabase.getData(path);
+  const now = Date.now();
+
+  await mockDatabase.doc(path).set({
+    uid: user.uid,
+    email: user.email,
+    displayName: user.displayName,
+    photoURL: user.photoURL,
+    createdAt: existing?.createdAt || now,
+    lastLoginAt: now,
+    preferences: existing?.preferences || {
+      defaultModel: 'anthropic',
+      autoSaveInterval: 30,
+      theme: 'auto',
+    },
+  });
 }
 
 const mockSupabaseClient = {
   auth: {
-    getSession: vi.fn(async () => ({ data: { session: null }, error: null })),
-    getUser: vi.fn(async () => ({ data: { user: mockAuth.currentUser }, error: null })),
-    onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
-    signInWithOAuth: vi.fn(async () => ({ data: null, error: null })),
-    signInWithPassword: vi.fn(async () => ({ data: { user: mockAuth.currentUser }, error: null })),
-    signUp: vi.fn(async () => ({ data: { user: mockAuth.currentUser }, error: null })),
-    resetPasswordForEmail: vi.fn(async () => ({ data: null, error: null })),
-    updateUser: vi.fn(async () => ({ data: { user: mockAuth.currentUser }, error: null })),
-    signOut: vi.fn(async () => ({ error: null })),
+    getSession: vi.fn(async () => ({ data: { session: toSession(mockAuth.currentUser) }, error: null })),
+    getUser: vi.fn(async () => ({ data: { user: toSupabaseUser(mockAuth.currentUser) }, error: null })),
+    onAuthStateChange: vi.fn((callback: (event: string, session: { user: ReturnType<typeof toSupabaseUser> } | null) => void) => {
+      const unsubscribe = mockAuth.onAuthStateChanged((user) => {
+        callback(user ? 'SIGNED_IN' : 'SIGNED_OUT', toSession(user));
+      });
+      callback('INITIAL_SESSION', toSession(mockAuth.currentUser));
+      return { data: { subscription: { unsubscribe } } };
+    }),
+    signInWithOAuth: vi.fn(async () => {
+      const pendingError = mockAuth.consumeError();
+      if (pendingError) {
+        return { data: { user: null, session: null }, error: pendingError };
+      }
+
+      const { user } = await mockAuth.signInWithPopup();
+      await upsertLegacyUser(user);
+
+      return {
+        data: { user: toSupabaseUser(user), session: toSession(user) },
+        error: null,
+      };
+    }),
+    signInWithPassword: vi.fn(async ({ email }: { email: string; password: string }) => {
+      const pendingError = mockAuth.consumeError();
+      if (pendingError) {
+        return { data: { user: null, session: null }, error: pendingError };
+      }
+
+      const user = mockAuth.currentUser || createMockUser({ email });
+      mockAuth.setUser(user);
+      await upsertLegacyUser(user);
+
+      return {
+        data: { user: toSupabaseUser(user), session: toSession(user) },
+        error: null,
+      };
+    }),
+    signUp: vi.fn(async ({ email, options }: { email: string; password: string; options?: { data?: { full_name?: string } } }) => {
+      const pendingError = mockAuth.consumeError();
+      if (pendingError) {
+        return { data: { user: null, session: null }, error: pendingError };
+      }
+
+      const user = createMockUser({
+        email,
+        displayName: options?.data?.full_name || 'New User',
+      });
+      mockAuth.setUser(user);
+      await upsertLegacyUser(user);
+
+      return {
+        data: { user: toSupabaseUser(user), session: toSession(user) },
+        error: null,
+      };
+    }),
+    resetPasswordForEmail: vi.fn(async () => {
+      const pendingError = mockAuth.consumeError();
+      if (pendingError) {
+        return { data: null, error: pendingError };
+      }
+      return { data: null, error: null };
+    }),
+    updateUser: vi.fn(async ({ data }: { data?: { full_name?: string; avatar_url?: string } }) => {
+      const pendingError = mockAuth.consumeError();
+      if (pendingError) {
+        return { data: { user: null }, error: pendingError };
+      }
+
+      if (!mockAuth.currentUser) {
+        return { data: { user: null }, error: new Error('No user is currently signed in') };
+      }
+
+      const updatedUser = {
+        ...mockAuth.currentUser,
+        displayName: data?.full_name ?? mockAuth.currentUser.displayName,
+        photoURL: data?.avatar_url ?? mockAuth.currentUser.photoURL,
+      };
+
+      mockAuth.setUser(updatedUser);
+      await upsertLegacyUser(updatedUser);
+
+      return { data: { user: toSupabaseUser(updatedUser) }, error: null };
+    }),
+    signOut: vi.fn(async () => {
+      const pendingError = mockAuth.consumeError();
+      if (pendingError) {
+        return { error: pendingError };
+      }
+      await mockAuth.signOut();
+      return { error: null };
+    }),
   },
-  from: vi.fn(() => createMockQuery()),
+  from: vi.fn((table: string) => mockSupabaseBrowserClient.from(table)),
+  channel: vi.fn((name: string) => mockSupabaseBrowserClient.channel(name)),
+  removeChannel: vi.fn((channel: unknown) => mockSupabaseBrowserClient.removeChannel(channel)),
   storage: {
     from: vi.fn(() => ({
       upload: vi.fn(async () => ({ data: null, error: null })),
@@ -63,6 +175,7 @@ vi.mock('@supabase/ssr', async () => ({
 vi.mock('@supabase/supabase-js', async () => ({
   createClient: vi.fn(() => mockSupabaseClient),
 }));
+
 
 // Mock pptxgenjs for presentation export tests
 // Note: Using vi.doMock would cause hoisting issues, so we create the mock inline
@@ -227,9 +340,9 @@ expect.extend({
 
 // Type augmentation for custom matchers
 declare module 'vitest' {
-  interface Assertion<T = unknown> {
-    toBeValidCitation(style: string): T;
-    toBeWithinRange(floor: number, ceiling: number): T;
+  interface Assertion {
+    toBeValidCitation(style: string): void;
+    toBeWithinRange(floor: number, ceiling: number): void;
   }
   interface AsymmetricMatchersContaining {
     toBeValidCitation(style: string): unknown;

@@ -6,6 +6,7 @@ import type { FeatureTab } from './feature-tabs';
 import { ChatInterface } from '@/components/chat/chat-interface';
 import { CommentsSidebar } from '@/components/collaboration/comments-sidebar';
 import type { DisciplineId } from '@/lib/supabase/schema';
+import { usePaperLibraryOptional } from '@/components/papers';
 
 // Lazy load the new feature panels for better performance
 const ResearchPanelCompact = lazy(() =>
@@ -55,6 +56,17 @@ export function TabContent({
   documentContent,
   userId,
 }: TabContentProps) {
+  const paperLibrary = usePaperLibraryOptional();
+  const seedPapers = (paperLibrary?.papers || []).map((paper) => ({
+    id: paper.id,
+    title: paper.title,
+    authors: (paper.authors || []).map((author) => author.name),
+    year: paper.year || new Date().getFullYear(),
+    citationCount: 0,
+    doi: undefined,
+    pmid: undefined,
+  }));
+
   // Render the active panel content
   // We keep all panels mounted but hidden to preserve state
   return (
@@ -123,6 +135,7 @@ export function TabContent({
       >
         <Suspense fallback={<LoadingFallback />}>
           <IntegratedDiscoveryPanel
+            seedPapers={seedPapers}
             onAddCitation={(citation) => {
               if (onInsertToEditor) {
                 // Format citation for insertion

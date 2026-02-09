@@ -6,8 +6,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { generatePresentation, createPresentationFromGeneration } from '@/lib/presentations/generator';
+import { generatePresentation } from '@/lib/presentations/generator';
 import { getDocument } from '@/lib/supabase/documents-admin';
+import { resolveApiUser, authErrorResponse } from '@/lib/supabase/api-auth';
 import {
   GenerationConfig,
   PresentationFormat,
@@ -111,11 +112,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Add authentication check
-    // For now, we'll allow any request but in production should verify:
-    // - User is authenticated
-    // - User has access to the document (if sourceId provided)
-    // - User hasn't exceeded generation quota
+    const authResult = await resolveApiUser(request, { requestedUserId: body.userId });
+    if (!authResult.userId) {
+      return authErrorResponse(authResult);
+    }
+    const userId = authResult.userId;
 
     // Get source content
     let sourceContent: string | undefined;
@@ -140,15 +141,16 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // TODO: Verify user owns this document
-      // if (document.userId !== body.userId) {
-      //   return NextResponse.json(
-      //     { success: false, error: 'Unauthorized' },
-      //     { status: 401 }
-      //   );
-      // }
-
       if (document) {
+        if (document.userId !== userId) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: 'Unauthorized access to document',
+            } as GenerateResponse,
+            { status: 403 }
+          );
+        }
         sourceContent = document.content;
         documentId = document.id;
       }

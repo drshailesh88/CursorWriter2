@@ -44,17 +44,25 @@ vi.mock('@ai-sdk/anthropic', () => ({
 const mockPaper: Paper = {
   id: 'paper-123',
   userId: 'user-456',
+  fileName: 'paper-123.pdf',
+  fileSize: 1024,
+  mimeType: 'application/pdf',
+  storageUrl: 'https://example.com/paper-123.pdf',
+  storagePath: 'papers/paper-123.pdf',
   title: 'Randomized Controlled Trial of Drug X',
   authors: [{ name: 'John Doe', firstName: 'John', lastName: 'Doe' }],
   year: 2024,
   abstract: 'This is a test abstract for an RCT',
-  createdAt: new Date(),
+  processingStatus: 'ready',
+  uploadedAt: new Date(),
   updatedAt: new Date(),
 };
 
 const mockContent: PaperContent = {
   paperId: 'paper-123',
+  userId: 'user-456',
   fullText: 'Full text of the paper including methods with sample size n=1000',
+  pageCount: 1,
   sections: [
     { type: 'abstract', title: 'Abstract', content: 'Abstract content' },
     { type: 'methods', title: 'Methods', content: 'We included 1000 participants in this RCT' },
@@ -64,6 +72,11 @@ const mockContent: PaperContent = {
   figures: [],
   tables: [],
   references: [],
+  extractionQuality: 'high',
+  ocrRequired: false,
+  processingTimeMs: 250,
+  extractedAt: new Date(),
+  updatedAt: new Date(),
 };
 
 describe('Research Matrix - Creation and Setup', () => {

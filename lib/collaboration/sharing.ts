@@ -116,11 +116,25 @@ export async function createEmailShare(
   try {
     const supabase = getSupabaseBrowserClient();
 
-    const { data: profile } = await supabase
+    let { data: profile } = await supabase
       .from('profiles')
       .select('id')
       .eq('email', email)
       .maybeSingle();
+
+    if (!profile) {
+      const { data: legacyUser } = await supabase
+        .from('users')
+        .select('id, uid')
+        .eq('email', email)
+        .maybeSingle();
+
+      if (legacyUser) {
+        profile = {
+          id: (legacyUser.id || legacyUser.uid) as string,
+        };
+      }
+    }
 
     const sharedWithUserId = profile?.id || null;
 
@@ -165,7 +179,7 @@ async function addToSharedWithMe(
     const supabase = getSupabaseBrowserClient();
     const { data: doc, error: docError } = await supabase
       .from('documents')
-      .select('title, user_id, word_count, updated_at')
+      .select('*')
       .eq('id', documentId)
       .single();
 
@@ -173,11 +187,39 @@ async function addToSharedWithMe(
       throw new Error('Document not found');
     }
 
-    const { data: ownerProfile } = await supabase
+    const ownerId = (doc.user_id || doc.userId) as string;
+    const updatedAt = (doc.updated_at || doc.updatedAt) as string;
+    const wordCount = (doc.word_count || doc.wordCount || 0) as number;
+
+    let { data: ownerProfile } = await supabase
       .from('profiles')
       .select('display_name, email')
-      .eq('id', doc.user_id)
+      .eq('id', ownerId)
       .maybeSingle();
+
+    if (!ownerProfile) {
+      let { data: legacyOwner } = await supabase
+        .from('users')
+        .select('displayName, email, uid, id')
+        .eq('uid', ownerId)
+        .maybeSingle();
+
+      if (!legacyOwner) {
+        const ownerById = await supabase
+          .from('users')
+          .select('displayName, email, uid, id')
+          .eq('id', ownerId)
+          .maybeSingle();
+        legacyOwner = ownerById.data as typeof legacyOwner;
+      }
+
+      if (legacyOwner) {
+        ownerProfile = {
+          display_name: legacyOwner.displayName as string | undefined,
+          email: legacyOwner.email as string | undefined,
+        };
+      }
+    }
 
     const ownerName = ownerProfile?.display_name || ownerProfile?.email || 'Unknown';
 
@@ -188,12 +230,12 @@ async function addToSharedWithMe(
         document_id: documentId,
         share_id: shareId,
         permission,
-        owner_id: doc.user_id,
+        owner_id: ownerId,
         owner_name: ownerName,
         title: doc.title,
         shared_at: new Date().toISOString(),
-        updated_at: doc.updated_at,
-        word_count: doc.word_count || 0,
+        updated_at: updatedAt,
+        word_count: wordCount,
       });
 
     if (error) {
@@ -357,7 +399,7 @@ export async function getUserDocumentPermission(
     const supabase = getSupabaseBrowserClient();
     const { data: doc } = await supabase
       .from('documents')
-      .select('user_id')
+      .select('*')
       .eq('id', documentId)
       .maybeSingle();
 
@@ -365,7 +407,8 @@ export async function getUserDocumentPermission(
       return null;
     }
 
-    if (doc.user_id === userId) {
+    const ownerId = (doc.user_id || doc.userId) as string | undefined;
+    if (ownerId === userId) {
       return 'edit';
     }
 
@@ -382,4 +425,3 @@ export async function getUserDocumentPermission(
     return null;
   }
 }
-

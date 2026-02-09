@@ -20,8 +20,10 @@ test.describe('Deep Research - Initiation', () => {
     // Check for research panel or trigger button
     const hasResearchUI = await page.evaluate(() => {
       const panel = document.querySelector('[data-testid*="research"], [class*="research"]');
-      const button = document.querySelector('button:has-text("Research"), button:has-text("Deep Research")');
-      return panel !== null || button !== null;
+      const hasResearchButton = Array.from(document.querySelectorAll('button')).some((button) =>
+        /research/i.test(button.textContent || '')
+      );
+      return panel !== null || hasResearchButton;
     });
 
     expect(typeof hasResearchUI).toBe('boolean');

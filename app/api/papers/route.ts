@@ -1,6 +1,7 @@
 // Papers API - List and Create papers
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserPapers, getUserPaperMetadata } from '@/lib/supabase/papers';
+import { resolveApiUser, authErrorResponse } from '@/lib/supabase/api-auth';
 
 // Force dynamic rendering (no static generation at build time)
 export const dynamic = 'force-dynamic';
@@ -12,15 +13,14 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
+    const requestedUserId = searchParams.get('userId');
     const metadataOnly = searchParams.get('metadata') === 'true';
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'userId is required' },
-        { status: 400 }
-      );
+    const authResult = await resolveApiUser(request, { requestedUserId });
+    if (!authResult.userId) {
+      return authErrorResponse(authResult);
     }
+    const userId = authResult.userId;
 
     if (metadataOnly) {
       const metadata = await getUserPaperMetadata(userId);

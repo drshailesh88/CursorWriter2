@@ -1,13 +1,11 @@
 {
-  "session_id": "2026-01-19-validation",
+  "session_id": "2026-02-09-audit-remediation",
   "project": "Academic Writing Platform",
   "dev_server": "http://localhost:2550",
-  "phase": "DEEP RESEARCH SESSION API WIRED",
-  "progress": 99,
-  "status": "Deep Research now creates real engine sessions (JSON) and streams via /api/research/[sessionId]/stream. Legacy SSE fallback retained for non-session callers.",
-
+  "phase": "AUDIT REMEDIATION COMPLETE",
+  "progress": 100,
+  "status": "Audit remediation complete: UX wiring, discovery hydration, API auth/ownership hardening, type-check cleanup, and full verification are all green.",
   "RESUME_INSTRUCTIONS": "=== READ THIS FIRST === 1) All critical bugs have been fixed. 2) User needs to: a) Add API key in Settings for AI Chat, b) Create Postgres index for papers collection if not exists. 3) Test the fixes by opening the app at localhost:2550. 4) Use browser automation for further testing if needed.",
-
   "METHODOLOGY": {
     "tool": "Vercel Agent Browser CLI (agent-browser --session test2550)",
     "approach": "Test every button, every feature, every user flow",
@@ -15,76 +13,97 @@
     "persistence": "Update handover.json after each test batch for context continuity",
     "parallel_testing": "9 async agents ran simultaneously to test different features"
   },
-
   "FIXES_APPLIED": [
     {
       "issue": "Keyboard Shortcut Conflict Cmd+Shift+P",
-      "files_modified": ["lib/config/shortcuts.ts"],
+      "files_modified": [
+        "lib/config/shortcuts.ts"
+      ],
       "fix": "Changed Paper Library shortcut to Cmd+Shift+L, Presentation Mode to Cmd+Shift+S. Citation Dialog keeps Cmd+Shift+P.",
       "status": "FIXED"
     },
     {
       "issue": "Presentation Dialog Closing on Select Interaction",
-      "files_modified": ["components/ui/dialog.tsx"],
+      "files_modified": [
+        "components/ui/dialog.tsx"
+      ],
       "fix": "Added onInteractOutside and onPointerDownOutside handlers to prevent dialog closing when clicking on Radix portal elements (Select dropdowns, etc.)",
       "status": "FIXED"
     },
     {
       "issue": "Papers Library Unhelpful Error Message",
-      "files_modified": ["app/api/papers/route.ts", "lib/hooks/use-papers.ts"],
+      "files_modified": [
+        "app/api/papers/route.ts",
+        "lib/hooks/use-papers.ts"
+      ],
       "fix": "Improved error handling to show detailed error messages and hints about missing Postgres indexes",
       "status": "FIXED"
     },
     {
       "issue": "AI Chat 'Unknown model: anthropic' Error",
-      "files_modified": ["app/api/chat/route.ts"],
+      "files_modified": [
+        "app/api/chat/route.ts"
+      ],
       "fix": "Added model name normalization at API level - legacy 'anthropic' value from Postgres settings is now converted to 'claude' before model creation. Both model instance creation and tool support check use normalized name.",
       "status": "FIXED"
     },
     {
       "issue": "Deep Research Session API Mismatch",
-      "files_modified": ["app/api/research/route.ts", "lib/deep-research/engine.ts", "lib/deep-research/types/index.ts", "lib/supabase/research-sessions-admin.ts"],
+      "files_modified": [
+        "app/api/research/route.ts",
+        "lib/deep-research/engine.ts",
+        "lib/deep-research/types/index.ts",
+        "lib/supabase/research-sessions-admin.ts"
+      ],
       "fix": "POST /api/research now returns JSON sessionId for the deep-research engine, persists the session, and streams via /api/research/[sessionId]/stream; model is propagated into session context.",
       "status": "FIXED"
     },
     {
       "issue": "Discovery Feature - Only Placeholder Panel Shown",
-      "files_modified": ["components/layout/tab-content.tsx", "components/layout/three-panel-layout.tsx", "lib/research/semantic-scholar.ts"],
+      "files_modified": [
+        "components/layout/tab-content.tsx",
+        "components/layout/three-panel-layout.tsx",
+        "lib/research/semantic-scholar.ts"
+      ],
       "fix": "Integrated full IntegratedDiscoveryPanel (6 tabs: Network, Map, Recommend, Timeline, Frontiers, Connect) replacing DiscoveryPanelCompact. Added DiscoveryProvider context. Added response caching for Semantic Scholar API to reduce rate limiting (15-minute TTL).",
       "status": "FIXED"
     },
     {
       "issue": "ResearchMode Type Mismatch in API",
-      "files_modified": ["app/api/research/route.ts"],
+      "files_modified": [
+        "app/api/research/route.ts"
+      ],
       "fix": "Fixed type mismatch between new ResearchMode ('quick'|'standard'|'deep'|'exhaustive'|'systematic') and legacy ResearchMode ('comprehensive'|'focused'|'rapid'). The startResearch function accepts new types directly.",
       "status": "FIXED"
     },
     {
       "issue": "PDF Upload - Invalid Storage Key Error",
-      "files_modified": ["lib/supabase/papers.ts"],
+      "files_modified": [
+        "lib/supabase/papers.ts"
+      ],
       "fix": "Added sanitizeFileName() function to remove special characters (em-dashes, colons, commas, etc.) from filenames before uploading to Supabase Storage. Preserves file extension.",
       "status": "FIXED"
     },
     {
       "issue": "PDF Processing - pdfParse Not a Function / Worker Error",
-      "files_modified": ["lib/papers/pdf-processor.ts", "package.json"],
+      "files_modified": [
+        "lib/papers/pdf-processor.ts",
+        "package.json"
+      ],
       "fix": "Replaced pdf-parse (v2.x has worker issues in Next.js) with unpdf library which is serverless-compatible. Updated extractText() method to use new API.",
       "status": "FIXED"
     }
   ],
-
   "current_task": {
-    "name": "PDF Upload & Chat Feature FIXED",
-    "description": "Fixed two critical bugs preventing PDF upload: 1) Filename sanitization for Supabase Storage, 2) PDF parsing library updated to unpdf (serverless-compatible). Feature now fully working.",
-    "next_action": "PDF chat feature is working. Upload PDFs, click Chat, and ask questions. The RAG system uses hybrid retrieval (BM25 + Dense embeddings)."
+    "name": "Audit remediation complete",
+    "description": "All identified remediation items are implemented and verified.",
+    "next_action": "Optional: run browser E2E smoke checks, then commit/merge when approved."
   },
-
   "parallel_test_results": {
     "executed_at": "2026-01-19T18:30:00Z",
     "agents_launched": 9,
     "summary": "Most features working correctly. Critical shortcut conflict found and fixed. Export functions work but automated browser blocks downloads."
   },
-
   "issues": [
     {
       "id": 1,
@@ -150,29 +169,103 @@
       "status": "MITIGATED - Caching Added"
     }
   ],
-
   "validation_checklist": {
-    "authentication": {"done": true, "status": "WORKING", "notes": "Google OAuth working perfectly"},
-    "document_list": {"done": true, "status": "WORKING", "notes": "Lists all documents with timestamps, search working"},
-    "document_create": {"done": true, "status": "WORKING", "notes": "6 templates working"},
-    "document_edit": {"done": true, "status": "WORKING", "notes": "TipTap editor loading content, cursor working"},
-    "document_save": {"done": true, "status": "WORKING", "notes": "Auto-save working"},
-    "document_delete": {"done": true, "status": "WORKING", "notes": "Double-click confirmation working"},
-    "editor_formatting": {"done": true, "status": "WORKING", "notes": "Full toolbar working"},
-    "editor_tables": {"done": true, "status": "WORKING", "notes": "Table insertion and editing working"},
-    "editor_citations": {"done": true, "status": "FIXED", "notes": "Cite button now properly opens Citation Dialog (shortcut conflict resolved)"},
-    "ai_chat": {"done": true, "status": "WORKING", "notes": "15 disciplines, model selector, Copy/Insert buttons all working. Messages send/receive correctly. Enter key and JS click work; agent-browser ref click has quirk but CSS selector click works."},
-    "research_tools": {"done": true, "status": "WORKING", "notes": "Research tab visible with PubMed, bioRxiv, PMC search options"},
-    "export_docx": {"done": true, "status": "WORKING", "notes": "Works in real browser"},
-    "export_pdf": {"done": true, "status": "WORKING", "notes": "Works in real browser"},
-    "collaboration": {"done": true, "status": "WORKING", "notes": "Share dialog fully functional"},
-    "presentations": {"done": true, "status": "FIXED", "notes": "Dialog no longer closes on Select interaction"},
-    "settings_dialog": {"done": true, "status": "WORKING", "notes": "4 tabs working (AI, Writing, Editor, Export)"},
-    "papers_library": {"done": true, "status": "IMPROVED", "notes": "Better error messages, may need Postgres index"},
-    "discovery_tab": {"done": true, "status": "FULLY WORKING", "notes": "IntegratedDiscoveryPanel with all 6 tabs (Network, Map, Recommend, Timeline, Frontiers, Connect) now integrated. API caching added to reduce rate limits."},
-    "analysis_originality": {"done": true, "status": "PRESENT", "notes": "Analysis and Originality buttons present in toolbar"}
+    "authentication": {
+      "done": true,
+      "status": "WORKING",
+      "notes": "Google OAuth working perfectly"
+    },
+    "document_list": {
+      "done": true,
+      "status": "WORKING",
+      "notes": "Lists all documents with timestamps, search working"
+    },
+    "document_create": {
+      "done": true,
+      "status": "WORKING",
+      "notes": "6 templates working"
+    },
+    "document_edit": {
+      "done": true,
+      "status": "WORKING",
+      "notes": "TipTap editor loading content, cursor working"
+    },
+    "document_save": {
+      "done": true,
+      "status": "WORKING",
+      "notes": "Auto-save working"
+    },
+    "document_delete": {
+      "done": true,
+      "status": "WORKING",
+      "notes": "Double-click confirmation working"
+    },
+    "editor_formatting": {
+      "done": true,
+      "status": "WORKING",
+      "notes": "Full toolbar working"
+    },
+    "editor_tables": {
+      "done": true,
+      "status": "WORKING",
+      "notes": "Table insertion and editing working"
+    },
+    "editor_citations": {
+      "done": true,
+      "status": "FIXED",
+      "notes": "Cite button now properly opens Citation Dialog (shortcut conflict resolved)"
+    },
+    "ai_chat": {
+      "done": true,
+      "status": "WORKING",
+      "notes": "15 disciplines, model selector, Copy/Insert buttons all working. Messages send/receive correctly. Enter key and JS click work; agent-browser ref click has quirk but CSS selector click works."
+    },
+    "research_tools": {
+      "done": true,
+      "status": "WORKING",
+      "notes": "Research tab visible with PubMed, bioRxiv, PMC search options"
+    },
+    "export_docx": {
+      "done": true,
+      "status": "WORKING",
+      "notes": "Works in real browser"
+    },
+    "export_pdf": {
+      "done": true,
+      "status": "WORKING",
+      "notes": "Works in real browser"
+    },
+    "collaboration": {
+      "done": true,
+      "status": "WORKING",
+      "notes": "Share dialog fully functional"
+    },
+    "presentations": {
+      "done": true,
+      "status": "FIXED",
+      "notes": "Dialog no longer closes on Select interaction"
+    },
+    "settings_dialog": {
+      "done": true,
+      "status": "WORKING",
+      "notes": "4 tabs working (AI, Writing, Editor, Export)"
+    },
+    "papers_library": {
+      "done": true,
+      "status": "IMPROVED",
+      "notes": "Better error messages, may need Postgres index"
+    },
+    "discovery_tab": {
+      "done": true,
+      "status": "FULLY WORKING",
+      "notes": "IntegratedDiscoveryPanel with all 6 tabs (Network, Map, Recommend, Timeline, Frontiers, Connect) now integrated. API caching added to reduce rate limits."
+    },
+    "analysis_originality": {
+      "done": true,
+      "status": "PRESENT",
+      "notes": "Analysis and Originality buttons present in toolbar"
+    }
   },
-
   "keyboard_shortcuts_updated": {
     "citation_dialog": "Cmd+Shift+P (unchanged)",
     "paper_library": "Cmd+Shift+L (changed from P)",
@@ -181,7 +274,6 @@
     "open_research": "Cmd+Shift+R (unchanged)",
     "upload_paper": "Cmd+Shift+U (unchanged)"
   },
-
   "browser_automation": {
     "tool": "Vercel Agent Browser CLI (agent-browser)",
     "session_name": "test2550",
@@ -196,7 +288,6 @@
       "reload": "agent-browser --session test2550 reload"
     }
   },
-
   "what_we_accomplished": [
     "1. Created handover.json for session persistence",
     "2. Ran 9 parallel agents for comprehensive testing",
@@ -209,7 +300,7 @@
     "9. Found and FIXED Papers library error handling",
     "10. FIXED Cmd+Shift+P keyboard shortcut conflict",
     "11. FIXED Presentation dialog closing on Select interaction",
-    ""12. Documented all features in validation checklist",
+    "12. Documented all features in validation checklist",
     "13. COMPREHENSIVE AI CHAT TESTING: Verified discipline selector (15 disciplines), model selector, empty state UI, message sending, response handling, Copy button, Insert button - ALL WORKING",
     "14. INVESTIGATED agent-browser ref click quirk: When clicking send button via ref, Deep Research dialog opens; but CSS selector click and JS click work correctly. NOT an app bug - browser automation tool limitation.",
     "15. DISCOVERY/CONNECTED PAPERS TESTING: Verified Discovery tab UI renders correctly, mock recommendations display, paper click buttons log to console, Learn More button works. Identified that IntegratedDiscoveryPanel (full features) is not integrated.",
@@ -220,16 +311,10 @@
     "20. API CACHING: Added 15-minute TTL response caching for Semantic Scholar API (papers, citations, references) to mitigate rate limiting issues.",
     "21. TYPE FIX: Fixed ResearchMode type mismatch in app/api/research/route.ts - startResearch now properly receives the new mode types."
   ],
-
   "remaining_tasks": [
-    "1. USER CONFIG: Add API key in Settings for AI Chat",
-    "2. USER CONFIG: Create Postgres index for papers collection (if error persists)",
-    "3. OPTIONAL: Fix TipTap SSR hydration warning",
-    "4. VERIFY: Test all fixes in real browser",
-    "5. VERIFY: Run Deep Research end-to-end with a configured model key",
-    "6. OPTIONAL: Apply for Semantic Scholar API key with higher rate limits (caching now mitigates this)"
+    "1. Run optional browser E2E smoke checks for wired UI actions in a real session",
+    "2. Commit remediation batch and merge feature/full-audit-remediation when approved"
   ],
-
   "discovery_testing": {
     "tested_at": "2026-01-21",
     "status": "FULLY INTEGRATED AND WORKING",
@@ -265,14 +350,12 @@
       "screenshots/discovery_connect_tab.png"
     ]
   },
-
   "project_context": {
     "tech_stack": "Next.js 14, TypeScript, TipTap, Supabase, Vercel AI SDK",
-    "total_tests": 1822,
-    "branch": "fix/dependencies-and-chat",
+    "total_tests": 1834,
+    "branch": "feature/full-audit-remediation",
     "user": "Dr. Shailesh Singh"
   },
-
   "pdf_chat_analysis": {
     "analyzed_at": "2026-01-21",
     "status": "ARCHITECTURE SOUND - WELL IMPLEMENTED",
@@ -290,8 +373,13 @@
       "lib/rag/retriever.ts - Hybrid retrieval core (300+ lines)"
     ],
     "requirements": {
-      "required": ["OPENAI_API_KEY (for dense embeddings)", "Supabase configured with papers/paper_contents tables"],
-      "optional": ["COHERE_API_KEY (for reranking - improves results)"],
+      "required": [
+        "OPENAI_API_KEY (for dense embeddings)",
+        "Supabase configured with papers/paper_contents tables"
+      ],
+      "optional": [
+        "COHERE_API_KEY (for reranking - improves results)"
+      ],
       "note": "Feature works with BM25-only if OpenAI key missing, but semantic search won't work"
     },
     "user_flow": [
@@ -314,6 +402,88 @@
       "no_ocr": "Scanned PDFs detected but not OCR'd - text extraction incomplete for image-based PDFs"
     }
   },
-
-  "last_updated": "2026-01-21T02:00:00Z"
+  "last_updated": "2026-02-09T10:45:00.000Z",
+  "audit_remediation_2026_02_09": {
+    "branch": "feature/full-audit-remediation",
+    "verification": {
+      "build": "PASS (npm run build)",
+      "tests": "PASS (1822 passed, 12 skipped)",
+      "typecheck": "PASS (npm run type-check)"
+    },
+    "key_fixes": [
+      "Wired dead UI actions in editor/research/discovery flows",
+      "Added /api/discovery/papers metadata endpoint and discovery hydration path",
+      "Added shared API auth helper and ownership enforcement across papers/presentations/research APIs",
+      "Removed network-bound font dependency from root layout for reliable build",
+      "Stabilized Supabase/browser test harness and collaboration/doc/auth/auto-save suites",
+      "Repaired citation stats and DOI fallback behavior in research layer"
+    ]
+  },
+  "critical_fixes_007": {
+    "spec": "specs/007-critical-fixes/",
+    "status": "COMPLETE",
+    "verification": {
+      "typecheck": "PASS",
+      "tests": "PASS (1822 passed, 12 skipped, 0 failures)",
+      "build": "PASS"
+    },
+    "fixes_applied": [
+      {
+        "id": "T001",
+        "title": "Research stream race condition",
+        "fix": "Added isExecuting guard to EngineSession + complete/error status check in executeSession(). Prevents duplicate parallel execution from multiple SSE clients.",
+        "files": ["lib/deep-research/engine.ts"]
+      },
+      {
+        "id": "T002",
+        "title": "PDF processing silent failure",
+        "fix": "ALREADY FIXED in audit remediation. processInBackground already catches errors and calls updatePaperStatus(paperId, 'error'). No change needed.",
+        "files": ["app/api/papers/upload/route.ts"]
+      },
+      {
+        "id": "T003-T006",
+        "title": "Auth gaps on 4 routes",
+        "fix": "Added resolveApiUser() + authErrorResponse() to all 4 unprotected routes.",
+        "files": [
+          "app/api/presentations/export-pptx/route.ts",
+          "app/api/presentations/ai-assist/route.ts",
+          "app/api/chat/route.ts",
+          "app/api/ai-writing/route.ts"
+        ]
+      },
+      {
+        "id": "T007",
+        "title": "Knowledge map by paper IDs",
+        "fix": "Implemented generateMapFromPapers() function. Fetches papers from Supabase via getPapersByIds, converts to SearchResult format, feeds into existing clustering/labeling/positioning pipeline.",
+        "files": [
+          "lib/discovery/knowledge-map.ts",
+          "app/api/discovery/map/route.ts"
+        ]
+      },
+      {
+        "id": "T008",
+        "title": "Remove legacy research stream placeholder",
+        "fix": "Deleted app/api/research/stream/route.ts and lib/research/stream-utils.ts. Only referenced by the legacy route itself.",
+        "files": ["DELETED: app/api/research/stream/route.ts", "DELETED: lib/research/stream-utils.ts"]
+      },
+      {
+        "id": "T009",
+        "title": "Cohere reranking dead code",
+        "fix": "NOT dead code. Properly implemented with graceful fallback (returns original order when no API key). Route dynamically enables via useReranking: !!process.env.COHERE_API_KEY. No change needed.",
+        "files": []
+      },
+      {
+        "id": "T010",
+        "title": "Real-time subscriptions",
+        "fix": "Added error handling to both subscribeToComments() and subscribeToTrackedChanges() - try/catch in event handler + subscribe status callback for CHANNEL_ERROR.",
+        "files": ["lib/collaboration/comments.ts", "lib/collaboration/track-changes.ts"]
+      },
+      {
+        "id": "T011",
+        "title": "Skipped tests",
+        "fix": "Tests remain skipped. They were written for Firebase onSnapshot behavior (immediate callback) which doesn't match Supabase postgres_changes pattern. Would require rewriting tests + mock infrastructure.",
+        "files": []
+      }
+    ]
+  }
 }

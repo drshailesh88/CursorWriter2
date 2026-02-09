@@ -11,13 +11,14 @@
  */
 
 import { describe, test, expect, beforeEach, vi } from 'vitest';
-import { mockDatabase, resetSupabaseMocks } from '../../mocks/supabase';
+import { mockDatabase, resetSupabaseMocks, mockSupabaseBrowserClient } from '../../mocks/supabase';
 import { createMockUser } from '../../mocks/test-data';
 import type { Comment, CommentReply, CreateCommentData } from '@/lib/collaboration/types';
 
 // Mock the Supabase client module
 vi.mock('@/lib/supabase/client', () => ({
   db: () => mockDatabase,
+  getSupabaseBrowserClient: () => mockSupabaseBrowserClient,
 }));
 
 vi.mock('@/lib/supabase/schema', () => ({

@@ -36,12 +36,15 @@ export interface SearchResult {
 
   // Metrics
   citationCount?: number;
+  referenceCount?: number;
   relevanceScore?: number;
 
   // Access
   openAccess: boolean;
 
   // Additional metadata
+  // Legacy alias used by older discovery fixtures.
+  sources?: string[];
   journal?: string;
   venue?: string;
   volume?: string;

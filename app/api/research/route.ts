@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { researchEngine } from '@/lib/deep-research/engine';
 import type { ResearchMode, ResearchConfig, ResearchModel } from '@/lib/deep-research/types';
 import { createResearchSession } from '@/lib/supabase/research-sessions-admin';
+import { resolveApiUser, authErrorResponse } from '@/lib/supabase/api-auth';
 import {
   startResearch,
   generatePerspectives,
@@ -230,16 +231,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Topic is required' }, { status: 400 });
     }
 
-    if (!userId) {
+    const authResult = await resolveApiUser(request, {
+      requestedUserId: userId,
+      allowAnonymous: !userId,
+    });
+    if (!authResult.userId && userId) {
+      return authErrorResponse(authResult);
+    }
+
+    if (!authResult.userId) {
       return legacySseResponse(topic, mode, rawConfig, model);
     }
+    const authorizedUserId = authResult.userId;
 
     const sessionId = randomUUID();
     const configOverrides = buildSessionConfig(rawConfig, model);
 
     await createResearchSession({
       id: sessionId,
-      userId,
+      userId: authorizedUserId,
       topic: topic.trim(),
       mode,
       status: 'clarifying',
@@ -247,7 +257,7 @@ export async function POST(request: NextRequest) {
     });
 
     await researchEngine.createSession(
-      userId,
+      authorizedUserId,
       topic.trim(),
       mode,
       configOverrides,

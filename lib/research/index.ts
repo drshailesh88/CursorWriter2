@@ -7,8 +7,12 @@
 
 import { searchPubMed } from '@/lib/pubmed/client';
 import { searchArxiv, arxivClient } from './arxiv';
-import { searchSemanticScholar, semanticScholarClient } from './semantic-scholar';
-import { searchOpenAlex, openalexClient } from './openalex';
+import {
+  searchSemanticScholar,
+  semanticScholarClient,
+  getByDOI as getSemanticScholarByDOI,
+} from './semantic-scholar';
+import { searchOpenAlex, openalexClient, getByDOI as getOpenAlexByDOI } from './openalex';
 import {
   type SearchQuery,
   type SearchResponse,
@@ -102,7 +106,7 @@ const DATABASE_CLIENTS: Record<DatabaseSource, DatabaseClient> = {
         total: results.length,
         source: 'pubmed',
         query,
-        executionTimeMs: Date.now() - startTime,
+        executionTimeMs: Math.max(1, Date.now() - startTime),
       };
     },
     supportsFullText: () => false,
@@ -329,7 +333,7 @@ export async function unifiedSearch(options: UnifiedSearchOptions): Promise<Unif
     total: finalResults.length,
     bySource,
     deduplicated: duplicateCount,
-    executionTimeMs: Date.now() - startTime,
+    executionTimeMs: Math.max(1, Date.now() - startTime),
     errors,
   };
 }
@@ -353,12 +357,15 @@ export async function searchDatabase(
  */
 export async function getByDOI(doi: string): Promise<SearchResult | null> {
   // Try Semantic Scholar first (best metadata)
-  const ssResult = await semanticScholarClient.getById?.(`DOI:${doi}`);
-  if (ssResult) return ssResult;
+  try {
+    const ssResult = await getSemanticScholarByDOI(doi);
+    if (ssResult) return ssResult;
+  } catch {
+    // Fall through to OpenAlex
+  }
 
   // Try OpenAlex (use the dedicated getByDOI function)
-  const { getByDOI: openAlexGetByDOI } = await import('./openalex');
-  const oaResult = await openAlexGetByDOI(doi);
+  const oaResult = await getOpenAlexByDOI(doi);
   if (oaResult) return oaResult;
 
   return null;

@@ -29,20 +29,33 @@ function sanitizeFileName(title?: string) {
 }
 
 function downloadBlob(blob: Blob, filename: string) {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return;
+  }
+
   const url = window.URL.createObjectURL(blob);
 
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = filename;
-  anchor.style.display = 'none';
-  document.body.appendChild(anchor);
+  if (anchor.style) {
+    anchor.style.display = 'none';
+  }
+  document.body?.appendChild(anchor);
 
-  anchor.click();
+  if (typeof anchor.click === 'function') {
+    anchor.click();
+  }
 
   // Cleanup after a delay to ensure download starts
   setTimeout(() => {
-    anchor.remove();
-    window.URL.revokeObjectURL(url);
+    if (typeof anchor.remove === 'function') {
+      anchor.remove();
+    } else {
+      anchor.parentNode?.removeChild(anchor);
+    }
+    const runtimeUrl = typeof window !== 'undefined' ? window.URL : globalThis.URL;
+    runtimeUrl?.revokeObjectURL?.(url);
   }, 100);
 }
 

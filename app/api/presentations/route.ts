@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdminClient } from '@/lib/supabase/admin';
 import { Presentation } from '@/lib/presentations/types';
+import { resolveApiUser, authErrorResponse } from '@/lib/supabase/api-auth';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -65,28 +66,15 @@ interface CreatePresentationResponse {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
+    const requestedUserId = searchParams.get('userId');
     const limitCount = parseInt(searchParams.get('limit') || '50', 10);
     const metadataOnly = searchParams.get('metadata') === 'true';
 
-    if (!userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'userId is required',
-        } as ListPresentationsResponse,
-        { status: 400 }
-      );
+    const authResult = await resolveApiUser(request, { requestedUserId });
+    if (!authResult.userId) {
+      return authErrorResponse(authResult);
     }
-
-    // TODO: Verify authenticated user matches userId
-    // const session = await getServerSession(authOptions);
-    // if (!session || session.user.id !== userId) {
-    //   return NextResponse.json(
-    //     { success: false, error: 'Unauthorized' },
-    //     { status: 401 }
-    //   );
-    // }
+    const userId = authResult.userId;
 
     // Query presentations for user
     const supabase = getSupabaseAdminClient();
@@ -136,18 +124,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    const authResult = await resolveApiUser(request, { requestedUserId: body.userId });
+    if (!authResult.userId) {
+      return authErrorResponse(authResult);
+    }
+    const userId = authResult.userId;
 
     // Validate required fields
-    if (!body.userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'userId is required',
-        } as CreatePresentationResponse,
-        { status: 400 }
-      );
-    }
-
     if (!body.title) {
       return NextResponse.json(
         {
@@ -178,17 +161,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // TODO: Verify authenticated user matches userId
-    // const session = await getServerSession(authOptions);
-    // if (!session || session.user.id !== body.userId) {
-    //   return NextResponse.json(
-    //     { success: false, error: 'Unauthorized' },
-    //     { status: 401 }
-    //   );
-    // }
-
     const presentationData: Omit<Presentation, 'id'> = {
-      userId: body.userId,
+      userId,
       documentId: body.documentId,
       title: body.title,
       description: body.description,

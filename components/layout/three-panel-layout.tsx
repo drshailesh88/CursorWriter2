@@ -568,6 +568,7 @@ function ThreePanelContent() {
                   content={content}
                   onChange={setContent}
                   onSave={saveNow}
+                  documentId={currentDocumentId}
                   placeholder="Start writing your academic paper..."
                 />
               )}
@@ -801,6 +802,7 @@ function ThreePanelContent() {
                     content={content}
                     onChange={setContent}
                     onSave={saveNow}
+                    documentId={currentDocumentId}
                     placeholder="Start writing your academic paper... Use the AI chat on the right to search PubMed or generate content."
                   />
                 )}

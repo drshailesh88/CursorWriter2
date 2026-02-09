@@ -27,8 +27,8 @@ function mapChange(row: ChangeRow): TrackedChange {
     type: row.type,
     from: row.from_pos,
     to: row.to_pos,
-    oldContent: row.old_content || undefined,
-    newContent: row.new_content || undefined,
+    oldContent: row.old_content ?? undefined,
+    newContent: row.new_content ?? undefined,
     userId: row.user_id,
     userName: row.user_name,
     status: row.status,
@@ -57,8 +57,8 @@ export async function createTrackedChange(
         type,
         from_pos: from,
         to_pos: to,
-        old_content: oldContent || null,
-        new_content: newContent || null,
+        old_content: oldContent ?? null,
+        new_content: newContent ?? null,
         user_id: userId,
         user_name: userName,
         status: 'pending',
@@ -211,14 +211,21 @@ export function subscribeToTrackedChanges(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'tracked_changes', filter: `document_id=eq.${documentId}` },
       async () => {
-        const changes = await getTrackedChanges(documentId);
-        callback(changes);
+        try {
+          const changes = await getTrackedChanges(documentId);
+          callback(changes);
+        } catch (error) {
+          console.error('Error fetching tracked changes in subscription:', error);
+        }
       }
     )
-    .subscribe();
+    .subscribe((status: string) => {
+      if (status === 'CHANNEL_ERROR') {
+        console.error(`Track changes subscription error for document ${documentId}`);
+      }
+    });
 
   return () => {
     supabase.removeChannel(channel);
   };
 }
-

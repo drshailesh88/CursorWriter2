@@ -37,7 +37,9 @@ import {
   type ReviewFeedback,
   type QualityScores,
   type Synthesis,
+  type SynthesisSection,
   type Progress,
+  type SessionStatus,
   type StudyDesign,
 } from '@/lib/research/deep-research/types';
 import type { SearchResult } from '@/lib/research/types';

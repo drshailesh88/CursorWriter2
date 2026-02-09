@@ -6,6 +6,7 @@
  */
 
 import { faker } from '@faker-js/faker';
+import type { Presentation, Slide, SlideContent } from '@/lib/presentations/types';
 
 // Set seed for reproducible tests
 faker.seed(12345);
@@ -45,36 +46,15 @@ export interface MockReference {
   DOI?: string;
   URL?: string;
   abstract?: string;
+  publisher?: string;
+  'publisher-place'?: string;
+  ISBN?: string;
+  'event-title'?: string;
+  'event-place'?: string;
 }
 
-export interface MockPresentation {
-  id: string;
-  userId: string;
-  documentId?: string;
-  title: string;
-  theme: 'academic' | 'dark' | 'minimal';
-  slides: MockSlide[];
-  settings: {
-    aspectRatio: '16:9' | '4:3';
-    showSlideNumbers: boolean;
-    showProgressBar: boolean;
-    autoAdvance: boolean;
-    autoAdvanceInterval: number;
-    transition: string;
-    transitionDuration: number;
-  };
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface MockSlide {
-  id: string;
-  type: string;
-  title: string;
-  content: string[];
-  notes: string;
-  chartConfig?: Record<string, unknown>;
-}
+export type MockPresentation = Presentation;
+export type MockSlide = Slide;
 
 // ============================================================
 // User Generators
@@ -185,30 +165,106 @@ export function createMockConference(overrides?: Partial<MockReference>): MockRe
 // Presentation Generators
 // ============================================================
 
-export function createMockSlide(type: string, overrides?: Partial<MockSlide>): MockSlide {
+function createSlideContent(type: Slide['type']): SlideContent {
+  const title = faker.lorem.sentence({ min: 3, max: 8 });
+
+  if (type === 'title') {
+    return {
+      title,
+      subtitle: faker.lorem.sentence(),
+      author: faker.person.fullName(),
+      institution: 'Test University',
+      date: '2024',
+    };
+  }
+
+  if (type === 'data-visualization') {
+    return {
+      title,
+      chart: {
+        type: 'bar',
+        data: {
+          labels: ['A', 'B', 'C'],
+          datasets: [{ label: 'Values', data: [10, 20, 30] }],
+        },
+        options: { title: 'Test Chart', showLegend: true },
+      },
+    };
+  }
+
+  if (type === 'references') {
+    return {
+      title: 'References',
+      citations: [
+        {
+          id: faker.string.uuid(),
+          authors: 'Smith et al.',
+          year: 2024,
+          title: 'Test Reference',
+          journal: 'Test Journal',
+          formatted: 'Smith et al. (2024). Test Reference. Test Journal.',
+        },
+      ],
+    };
+  }
+
+  if (type === 'two-column') {
+    return {
+      title,
+      leftContent: [
+        { text: faker.lorem.sentence(), level: 0 },
+        { text: faker.lorem.sentence(), level: 1 },
+      ],
+      rightContent: [
+        { text: faker.lorem.sentence(), level: 0 },
+        { text: faker.lorem.sentence(), level: 1 },
+      ],
+    };
+  }
+
+  return {
+    title,
+    bullets: [
+      { text: faker.lorem.sentence(), level: 0 },
+      { text: faker.lorem.sentence(), level: 0 },
+      { text: faker.lorem.sentence(), level: 1 },
+    ],
+  };
+}
+
+export function createMockSlide(type: Slide['type'], overrides?: Partial<MockSlide>): MockSlide {
+  const layout = type === 'title' || type === 'quote' || type === 'section-divider'
+    ? 'centered'
+    : type === 'two-column'
+      ? 'split'
+      : 'full';
+
   return {
     id: faker.string.uuid(),
     type,
-    title: faker.lorem.sentence({ min: 3, max: 8 }),
-    content: [faker.lorem.sentence(), faker.lorem.sentence(), faker.lorem.sentence()],
-    notes: faker.lorem.paragraph(),
+    layout,
+    order: 0,
+    speakerNotes: faker.lorem.paragraph(),
+    content: createSlideContent(type),
     ...overrides,
   };
 }
 
 export function createMockPresentation(overrides?: Partial<MockPresentation>): MockPresentation {
+  const slides: MockSlide[] = [
+    createMockSlide('title', { order: 0 }),
+    createMockSlide('content', { order: 1 }),
+    createMockSlide('data-visualization', { order: 2 }),
+    createMockSlide('two-column', { order: 3 }),
+    createMockSlide('references', { order: 4 }),
+  ];
+
   return {
     id: faker.string.uuid(),
     userId: faker.string.uuid(),
     title: faker.lorem.sentence(),
     theme: faker.helpers.arrayElement(['academic', 'dark', 'minimal']),
-    slides: [
-      createMockSlide('title'),
-      createMockSlide('content'),
-      createMockSlide('data-visualization'),
-      createMockSlide('two-column'),
-      createMockSlide('references'),
-    ],
+    slides,
     settings: {
       aspectRatio: '16:9',
       showSlideNumbers: true,
@@ -451,7 +507,13 @@ export const edgeCases = {
 
   // Slide with very long content
   longSlide: () => createMockSlide('content', {
-    content: Array.from({ length: 50 }, () => faker.lorem.sentence()),
+    content: {
+      title: 'Long Content Slide',
+      bullets: Array.from({ length: 50 }, () => ({
+        text: faker.lorem.sentence(),
+        level: 0 as const,
+      })),
+    },
   }),
 
   // Document with malformed HTML

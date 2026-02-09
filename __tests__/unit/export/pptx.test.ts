@@ -15,7 +15,7 @@ import { mockPptxSlide, mockPptxInstance as mockPptx } from 'pptxgenjs';
 describe('PPTX Export', () => {
   // Helper to create a full presentation with all slide types
   const createFullPresentation = (): Presentation => {
-    const now = MockTimestamp.now();
+    const now = MockTimestamp.timestampNow();
 
     const slides: Slide[] = [
       // Title slide
@@ -703,7 +703,7 @@ describe('PPTX Export', () => {
     });
 
     test('handles presentation with all chart types', async () => {
-      const now = MockTimestamp.now();
+      const now = MockTimestamp.timestampNow();
       const presentation: Presentation = {
         id: 'pres-charts',
         userId: 'user-1',

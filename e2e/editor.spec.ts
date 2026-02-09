@@ -280,11 +280,10 @@ test.describe('Editor Integration', () => {
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(2000);
 
-    // Check for state management indicators
+    // Check for state management indicators in App Router layout.
     const hasStateManagement = await page.evaluate(() => {
-      // React renders a tree that maintains state
-      const root = document.querySelector('#__next');
-      return root !== null && root.children.length > 0;
+      const appContainer = document.querySelector('main, [role="main"], body > div');
+      return appContainer !== null && document.body.children.length > 0;
     });
 
     expect(hasStateManagement).toBeTruthy();

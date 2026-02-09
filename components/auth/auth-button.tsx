@@ -47,7 +47,7 @@ export function AuthButton() {
       <>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="gap-2">
+            <Button variant="ghost" size="sm" className="gap-2" data-testid="user-menu">
               {user.photoURL ? (
                 <img
                   src={user.photoURL}
@@ -75,7 +75,7 @@ export function AuthButton() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut}>
+            <DropdownMenuItem onClick={handleSignOut} data-testid="sign-out-button">
               <LogOut className="w-4 h-4 mr-2" />
               Sign Out
             </DropdownMenuItem>
@@ -90,6 +90,7 @@ export function AuthButton() {
       <Button
         variant="default"
         size="sm"
+        data-testid="sign-in-button"
         onClick={() => setAuthDialogOpen(true)}
       >
         <LogIn className="w-4 h-4 mr-2" />

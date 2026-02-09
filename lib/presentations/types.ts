@@ -58,6 +58,8 @@ export interface ChartDataset {
 export interface ChartData {
   labels: string[];
   datasets: ChartDataset[];
+  // Optional explicit points for scatter/bubble-style charts.
+  points?: Array<{ x: number; y: number; label?: string; size?: number }>;
 }
 
 export interface ChartOptions {
@@ -460,7 +462,7 @@ export interface VisualizationOpportunity {
   type: ChartType | 'flowchart' | 'table';
   confidence: number;
   extractedData: DataPoint[];
-  suggestedConfig: Partial<ChartConfig | FlowchartConfig | TableConfig>;
+  suggestedConfig: Partial<ChartConfig> & Partial<FlowchartConfig> & Partial<TableConfig>;
   position: { start: number; end: number };
 }
 

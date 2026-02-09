@@ -332,7 +332,7 @@ export interface MatrixColumn {
   type: 'text' | 'number' | 'percentage' | 'boolean' | 'rating' | 'calculated';
   extractionPrompt?: string; // AI prompt to extract this data
   formula?: string; // For calculated columns
-  width: number;
+  width?: number;
 }
 
 /**

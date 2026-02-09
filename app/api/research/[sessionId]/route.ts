@@ -6,6 +6,30 @@ import {
   deleteResearchSession,
   toResearchSession,
 } from '@/lib/supabase/research-sessions-admin';
+import { resolveApiUser, authErrorResponse } from '@/lib/supabase/api-auth';
+
+async function getOwnedSession(
+  sessionId: string,
+  userId: string
+): Promise<{ engineSession?: ReturnType<typeof researchEngine.getSession>; storedSession?: Awaited<ReturnType<typeof getResearchSession>>; forbidden: boolean }> {
+  const engineSession = researchEngine.getSession(sessionId);
+  if (engineSession) {
+    return {
+      engineSession,
+      forbidden: engineSession.userId !== userId,
+    };
+  }
+
+  const storedSession = await getResearchSession(sessionId);
+  if (storedSession) {
+    return {
+      storedSession,
+      forbidden: storedSession.userId !== userId,
+    };
+  }
+
+  return { forbidden: false };
+}
 
 /**
  * GET /api/research/[sessionId] - Get session details
@@ -16,18 +40,27 @@ export async function GET(
 ) {
   try {
     const { sessionId } = params;
+    const authResult = await resolveApiUser(request);
+    if (!authResult.userId) {
+      return authErrorResponse(authResult);
+    }
+    const userId = authResult.userId;
 
-    // Try to get from engine first (for active sessions)
-    const engineSession = researchEngine.getSession(sessionId);
-    if (engineSession) {
-      return NextResponse.json({ session: engineSession });
+    const ownedSession = await getOwnedSession(sessionId, userId);
+    if (ownedSession.forbidden) {
+      return NextResponse.json(
+        { error: 'Session not found' },
+        { status: 404 }
+      );
     }
 
-    // Fall back to Supabase (for persisted sessions)
-    const storedSession = await getResearchSession(sessionId);
-    if (storedSession) {
+    if (ownedSession.engineSession) {
+      return NextResponse.json({ session: ownedSession.engineSession });
+    }
+
+    if (ownedSession.storedSession) {
       return NextResponse.json({
-        session: toResearchSession(storedSession),
+        session: toResearchSession(ownedSession.storedSession),
       });
     }
 
@@ -53,6 +86,19 @@ export async function DELETE(
 ) {
   try {
     const { sessionId } = params;
+    const authResult = await resolveApiUser(request);
+    if (!authResult.userId) {
+      return authErrorResponse(authResult);
+    }
+    const userId = authResult.userId;
+
+    const ownedSession = await getOwnedSession(sessionId, userId);
+    if (ownedSession.forbidden || (!ownedSession.engineSession && !ownedSession.storedSession)) {
+      return NextResponse.json(
+        { error: 'Session not found' },
+        { status: 404 }
+      );
+    }
 
     // Cancel in engine if active
     researchEngine.cancelSession(sessionId);

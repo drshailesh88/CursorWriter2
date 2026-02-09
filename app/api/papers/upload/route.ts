@@ -8,6 +8,7 @@ export const dynamic = 'force-dynamic';
 import { uploadPaperFile, createPaper, updatePaperStatus, updatePaperMetadata } from '@/lib/supabase/papers';
 import { savePaperContent } from '@/lib/supabase/papers';
 import { PDFProcessor } from '@/lib/papers/pdf-processor';
+import { resolveApiUser, authErrorResponse } from '@/lib/supabase/api-auth';
 
 // Max file size: 100MB
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
@@ -23,7 +24,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const userId = formData.get('userId') as string | null;
+    const requestedUserId = formData.get('userId') as string | null;
 
     // Validate inputs
     if (!file) {
@@ -33,12 +34,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'userId is required' },
-        { status: 400 }
-      );
+    const authResult = await resolveApiUser(request, { requestedUserId });
+    if (!authResult.userId) {
+      return authErrorResponse(authResult);
     }
+    const userId = authResult.userId;
 
     // Validate file type
     if (!ALLOWED_TYPES.includes(file.type)) {
