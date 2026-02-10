@@ -12,7 +12,10 @@ export interface AuthUser {
   photoURL: string | null;
 }
 
-const DEV_AUTH_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === 'true';
+function isDevAuthBypassEnabled(): boolean {
+  const isTestEnv = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+  return process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === 'true' && !isTestEnv;
+}
 
 const DEV_MOCK_USER: AuthUser = {
   uid: '00000000-0000-0000-0000-000000000001',
@@ -37,16 +40,16 @@ function mapUser(user: SupabaseUser): AuthUser {
 }
 
 export function isDevAuthBypass(): boolean {
-  return DEV_AUTH_BYPASS;
+  return isDevAuthBypassEnabled();
 }
 
 export function useAuth() {
-  const [user, setUser] = useState<AuthUser | null>(DEV_AUTH_BYPASS ? DEV_MOCK_USER : null);
+  const [user, setUser] = useState<AuthUser | null>(isDevAuthBypassEnabled() ? DEV_MOCK_USER : null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (DEV_AUTH_BYPASS) {
+    if (isDevAuthBypassEnabled()) {
       setUser(DEV_MOCK_USER);
       setLoading(false);
       void upsertDevProfile();
@@ -95,11 +98,11 @@ export function useAuth() {
     };
   }, []);
 
-  return {
-    user,
+    return {
+      user,
     loading,
     error,
-    isDevMode: DEV_AUTH_BYPASS,
+    isDevMode: isDevAuthBypassEnabled(),
   };
 }
 
@@ -148,7 +151,7 @@ async function upsertDevProfile(): Promise<void> {
 }
 
 export async function signInWithGoogle(): Promise<AuthUser> {
-  if (DEV_AUTH_BYPASS) return DEV_MOCK_USER;
+  if (isDevAuthBypassEnabled()) return DEV_MOCK_USER;
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -179,7 +182,7 @@ export async function signInWithGoogle(): Promise<AuthUser> {
 }
 
 export async function signInWithEmail(email: string, password: string): Promise<AuthUser> {
-  if (DEV_AUTH_BYPASS) return DEV_MOCK_USER;
+  if (isDevAuthBypassEnabled()) return DEV_MOCK_USER;
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
@@ -203,7 +206,7 @@ export async function signUpWithEmail(
   password: string,
   displayName: string
 ): Promise<AuthUser> {
-  if (DEV_AUTH_BYPASS) return DEV_MOCK_USER;
+  if (isDevAuthBypassEnabled()) return DEV_MOCK_USER;
   const supabase = getSupabaseBrowserClient();
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -229,7 +232,7 @@ export async function signUpWithEmail(
 }
 
 export async function sendPasswordReset(email: string): Promise<void> {
-  if (DEV_AUTH_BYPASS) return;
+  if (isDevAuthBypassEnabled()) return;
   const supabase = getSupabaseBrowserClient();
   const { error } = await supabase.auth.resetPasswordForEmail(email);
 
@@ -237,7 +240,7 @@ export async function sendPasswordReset(email: string): Promise<void> {
 }
 
 export async function updateUserProfile(displayName?: string, photoURL?: string): Promise<void> {
-  if (DEV_AUTH_BYPASS) return;
+  if (isDevAuthBypassEnabled()) return;
   const supabase = getSupabaseBrowserClient();
   const { data: currentUserData } = await supabase.auth.getUser();
   if (!currentUserData?.user) {
@@ -267,7 +270,7 @@ export async function updateUserProfile(displayName?: string, photoURL?: string)
 }
 
 export async function signOut() {
-  if (DEV_AUTH_BYPASS) return;
+  if (isDevAuthBypassEnabled()) return;
   const supabase = getSupabaseBrowserClient();
   const { error } = await supabase.auth.signOut();
 
@@ -276,7 +279,7 @@ export async function signOut() {
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   try {
-    if (DEV_AUTH_BYPASS && uid === DEV_MOCK_USER.uid) {
+    if (isDevAuthBypassEnabled() && uid === DEV_MOCK_USER.uid) {
       return {
         uid: DEV_MOCK_USER.uid,
         email: DEV_MOCK_USER.email ?? '',
