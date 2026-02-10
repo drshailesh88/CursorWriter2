@@ -90,6 +90,21 @@ interface PaperEvaluation {
 }
 
 /**
+ * LLM triage result for a single paper.
+ * Replaces static heuristic evaluation with genuine understanding
+ * of whether a paper addresses the research question.
+ */
+interface TriageResult {
+  paperId: string;
+  verdict: 'RELEVANT' | 'MAYBE' | 'SKIP';
+  relevanceScore: number; // 0-1, from LLM assessment
+  reason: string;
+  keyFindings: string[];
+  methodology?: string;
+  limitations?: string[];
+}
+
+/**
  * Result from researcher agent
  */
 interface ResearcherResult {
@@ -98,6 +113,12 @@ interface ResearcherResult {
   selectedSources: ResearchSource[];
   totalPapersFound: number;
   totalPapersSelected: number;
+  triageStats?: {
+    relevant: number;
+    maybe: number;
+    skipped: number;
+    llmTriageUsed: boolean;
+  };
 }
 
 /**
@@ -197,10 +218,121 @@ export class ResearcherAgent extends BaseAgent {
     };
   }
 
+  // --- LLM-Powered Paper Triage ---
+  // Replaces static heuristic scoring with genuine semantic understanding.
+  // Processes papers in batches of ~12 per LLM call for cost efficiency.
+  // One call both evaluates relevance AND extracts key findings.
+
+  /** Cache of triage results keyed by paper ID */
+  private triageCache: Map<string, TriageResult> = new Map();
+
   /**
-   * Calculate relevance score based on title/abstract matching
+   * Triage a batch of papers using a single LLM call.
+   *
+   * Sends title + truncated abstract (300 chars) for each paper,
+   * asks the LLM to classify each as RELEVANT/MAYBE/SKIP and extract
+   * key findings in one pass. Falls back to heuristic scoring if LLM
+   * is unavailable.
    */
-  private calculateRelevanceScore(paper: RawPaper, topic: string): number {
+  private async triagePapers(
+    papers: RawPaper[],
+    topic: string,
+  ): Promise<TriageResult[]> {
+    if (papers.length === 0) return [];
+
+    // Build compact paper summaries for the LLM
+    const paperSummaries = papers.map((p, i) => {
+      const abstractSnippet = p.abstract
+        ? p.abstract.substring(0, 300) + (p.abstract.length > 300 ? '...' : '')
+        : 'No abstract available';
+      return `[${i}] "${p.title}" (${p.authors.slice(0, 3).join(', ')}${p.authors.length > 3 ? ' et al.' : ''}, ${p.year})${p.journal ? ` — ${p.journal}` : ''}${p.citationCount ? ` [${p.citationCount} citations]` : ''}\nAbstract: ${abstractSnippet}`;
+    }).join('\n\n');
+
+    const prompt = `You are a research paper triage system. Given a research topic and a batch of papers, evaluate each paper's relevance and extract key information.
+
+## Research Topic
+"${topic}"
+
+## Papers to Evaluate
+${paperSummaries}
+
+## Instructions
+For EACH paper, provide:
+1. verdict: RELEVANT (directly addresses the topic), MAYBE (tangentially related), or SKIP (not relevant)
+2. relevance: 0.0-1.0 score
+3. reason: One sentence explaining your verdict
+4. findings: 1-3 key findings from the abstract (empty array if SKIP)
+5. methodology: Brief methodology description if apparent (null if not clear)
+
+Respond with ONLY valid JSON:
+{
+  "papers": [
+    {
+      "index": 0,
+      "verdict": "RELEVANT",
+      "relevance": 0.85,
+      "reason": "Directly investigates...",
+      "findings": ["Finding 1", "Finding 2"],
+      "methodology": "Randomized controlled trial, n=500"
+    }
+  ]
+}`;
+
+    try {
+      const { text, tokensUsed } = await this.callLLM(prompt);
+      this.addMessage('assistant', `Triage LLM used ${tokensUsed} tokens for ${papers.length} papers`);
+
+      // Parse response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error('No JSON in triage response');
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      const results: TriageResult[] = [];
+
+      for (const item of (parsed.papers || [])) {
+        const idx = typeof item.index === 'number' ? item.index : results.length;
+        if (idx >= papers.length) continue;
+
+        const paper = papers[idx];
+        const result: TriageResult = {
+          paperId: paper.id,
+          verdict: (['RELEVANT', 'MAYBE', 'SKIP'].includes(item.verdict) ? item.verdict : 'MAYBE') as TriageResult['verdict'],
+          relevanceScore: typeof item.relevance === 'number' ? Math.min(1, Math.max(0, item.relevance)) : 0.5,
+          reason: item.reason || 'No reason provided',
+          keyFindings: Array.isArray(item.findings) ? item.findings : [],
+          methodology: item.methodology || undefined,
+        };
+
+        this.triageCache.set(paper.id, result);
+        results.push(result);
+      }
+
+      // Fill in any papers the LLM missed with fallback
+      for (let i = 0; i < papers.length; i++) {
+        if (!results.some(r => r.paperId === papers[i].id)) {
+          const fallback = this.heuristicTriage(papers[i], topic);
+          this.triageCache.set(papers[i].id, fallback);
+          results.push(fallback);
+        }
+      }
+
+      return results;
+    } catch {
+      // LLM failed — fall back to heuristic for all papers
+      this.addMessage('assistant', 'LLM triage unavailable, using heuristic fallback');
+      return papers.map(p => {
+        const result = this.heuristicTriage(p, topic);
+        this.triageCache.set(p.id, result);
+        return result;
+      });
+    }
+  }
+
+  /**
+   * Heuristic fallback triage when LLM is unavailable.
+   * Uses keyword matching — same logic as before, but packaged as a TriageResult.
+   */
+  private heuristicTriage(paper: RawPaper, topic: string): TriageResult {
     const topicWords = topic.toLowerCase().split(/\s+/).filter(w => w.length > 3);
     const text = `${paper.title} ${paper.abstract || ''}`.toLowerCase();
 
@@ -208,31 +340,33 @@ export class ResearcherAgent extends BaseAgent {
     for (const word of topicWords) {
       if (text.includes(word)) matches++;
     }
+    const relevanceScore = topicWords.length > 0 ? Math.min(matches / topicWords.length, 1) : 0.5;
 
-    return Math.min(matches / topicWords.length, 1);
+    let verdict: TriageResult['verdict'] = 'SKIP';
+    if (relevanceScore >= 0.6) verdict = 'RELEVANT';
+    else if (relevanceScore >= 0.3) verdict = 'MAYBE';
+
+    return {
+      paperId: paper.id,
+      verdict,
+      relevanceScore,
+      reason: `Keyword match: ${matches}/${topicWords.length} topic terms found`,
+      keyFindings: [],
+    };
   }
+
+  // --- Evaluation (now enhanced with triage data) ---
 
   /**
    * Calculate quality score based on available metadata
    */
   private calculateQualityScore(paper: RawPaper): number {
-    let score = 0.5; // Base score
-
-    // Has abstract
+    let score = 0.5;
     if (paper.abstract && paper.abstract.length > 200) score += 0.1;
-
-    // Has DOI (peer-reviewed)
     if (paper.doi) score += 0.1;
-
-    // Has journal name
     if (paper.journal) score += 0.1;
-
-    // Multiple authors (collaborative research)
     if (paper.authors.length >= 3) score += 0.1;
-
-    // Has PMID (indexed in PubMed)
     if (paper.pmid) score += 0.1;
-
     return Math.min(score, 1);
   }
 
@@ -240,9 +374,7 @@ export class ResearcherAgent extends BaseAgent {
    * Calculate recency score
    */
   private calculateRecencyScore(paper: RawPaper): number {
-    const currentYear = new Date().getFullYear();
-    const age = currentYear - paper.year;
-
+    const age = new Date().getFullYear() - paper.year;
     if (age <= 2) return 1.0;
     if (age <= 5) return 0.8;
     if (age <= 10) return 0.6;
@@ -255,7 +387,6 @@ export class ResearcherAgent extends BaseAgent {
    */
   private calculateImpactScore(paper: RawPaper): number {
     const citations = paper.citationCount || 0;
-
     if (citations >= 100) return 1.0;
     if (citations >= 50) return 0.8;
     if (citations >= 20) return 0.6;
@@ -264,31 +395,32 @@ export class ResearcherAgent extends BaseAgent {
   }
 
   /**
-   * Evaluate a paper for inclusion
+   * Evaluate a paper for inclusion.
+   * Uses LLM triage relevance score when available (replacing keyword matching),
+   * combined with metadata-based quality/recency/impact scores.
    */
   private evaluatePaper(paper: RawPaper, topic: string, minScore: number): PaperEvaluation {
-    const relevanceScore = this.calculateRelevanceScore(paper, topic);
+    // Use LLM triage relevance if available, otherwise fall back to keyword matching
+    const triage = this.triageCache.get(paper.id);
+    const relevanceScore = triage ? triage.relevanceScore : this.heuristicTriage(paper, topic).relevanceScore;
     const qualityScore = this.calculateQualityScore(paper);
     const recencyScore = this.calculateRecencyScore(paper);
     const impactScore = this.calculateImpactScore(paper);
 
-    // Weighted overall score
+    // Weighted overall score — relevance now comes from LLM understanding
     const overallScore =
       relevanceScore * 0.4 +
       qualityScore * 0.25 +
       recencyScore * 0.2 +
       impactScore * 0.15;
 
-    const include = overallScore >= minScore;
-    let reason = '';
+    // Papers triaged as SKIP get excluded regardless of score
+    const skipped = triage?.verdict === 'SKIP';
+    const include = !skipped && overallScore >= minScore;
 
-    if (!include) {
-      if (relevanceScore < 0.3) reason = 'Low relevance to research topic';
-      else if (qualityScore < 0.4) reason = 'Insufficient quality indicators';
-      else reason = 'Below threshold for inclusion';
-    } else {
-      reason = 'Meets inclusion criteria';
-    }
+    const reason = triage
+      ? triage.reason
+      : (include ? 'Meets inclusion criteria' : 'Below threshold for inclusion');
 
     return {
       paperId: paper.id,
@@ -303,15 +435,16 @@ export class ResearcherAgent extends BaseAgent {
   }
 
   /**
-   * Extract content from a paper
+   * Extract content from a paper using triage data when available.
+   * LLM triage already extracts key findings and methodology from the abstract
+   * in the same call that evaluates relevance — no extra cost.
    */
   private extractContent(paper: RawPaper): ExtractedContent {
-    // In production, this would use NLP/LLM to extract structured content
+    const triage = this.triageCache.get(paper.id);
     const dataPoints: DataPoint[] = [];
 
-    // Simple extraction from abstract
+    // Extract statistics from abstract
     if (paper.abstract) {
-      // Look for numbers that might be statistics
       const statMatches = paper.abstract.match(/\d+\.?\d*\s*%/g);
       if (statMatches) {
         statMatches.forEach((match, i) => {
@@ -325,8 +458,19 @@ export class ResearcherAgent extends BaseAgent {
       }
     }
 
+    // Use triage findings if available (extracted by LLM during triage)
+    if (triage) {
+      return {
+        keyFindings: triage.keyFindings,
+        methodology: triage.methodology,
+        limitations: triage.limitations || [],
+        conclusions: undefined,
+        dataPoints,
+      };
+    }
+
     return {
-      keyFindings: [], // Would be extracted by LLM
+      keyFindings: [],
       methodology: undefined,
       limitations: [],
       conclusions: undefined,
@@ -411,13 +555,43 @@ export class ResearcherAgent extends BaseAgent {
       const allPapers = this.searchResults.flatMap(r => r.papers);
       this.addMessage('assistant', `Found ${allPapers.length} papers across ${queries.length} databases`);
 
-      // Evaluate papers
-      this.updateStatus('working', 'Evaluating papers', 60);
-      const minScore = config.maxSources > 50 ? 0.5 : 0.6; // Adjust threshold based on target
+      // LLM Triage — evaluate papers in batches using LLM understanding
+      // instead of keyword matching. Each batch handles ~12 papers per LLM call.
+      this.updateStatus('working', 'Triaging papers with LLM', 55);
+      this.triageCache.clear();
+      const BATCH_SIZE = 12;
+      let llmTriageUsed = false;
+
+      for (let i = 0; i < allPapers.length; i += BATCH_SIZE) {
+        const batch = allPapers.slice(i, i + BATCH_SIZE);
+        const progress = 55 + (i / allPapers.length) * 15;
+        this.updateStatus('working', `Triaging papers ${i + 1}-${Math.min(i + BATCH_SIZE, allPapers.length)}`, progress);
+
+        const triageResults = await this.triagePapers(batch, topic);
+        if (triageResults.some(r => r.keyFindings.length > 0)) {
+          llmTriageUsed = true;
+        }
+      }
+
+      const triageStats = {
+        relevant: Array.from(this.triageCache.values()).filter(t => t.verdict === 'RELEVANT').length,
+        maybe: Array.from(this.triageCache.values()).filter(t => t.verdict === 'MAYBE').length,
+        skipped: Array.from(this.triageCache.values()).filter(t => t.verdict === 'SKIP').length,
+        llmTriageUsed,
+      };
+
+      this.addMessage('assistant',
+        `Triage: ${triageStats.relevant} relevant, ${triageStats.maybe} maybe, ${triageStats.skipped} skipped` +
+        (llmTriageUsed ? ' (LLM-powered)' : ' (heuristic fallback)')
+      );
+
+      // Evaluate papers (now uses LLM triage relevance scores)
+      this.updateStatus('working', 'Evaluating papers', 75);
+      const minScore = config.maxSources > 50 ? 0.5 : 0.6;
       const evaluations = allPapers.map(paper => this.evaluatePaper(paper, topic, minScore));
 
       // Select papers
-      this.updateStatus('working', 'Selecting papers', 80);
+      this.updateStatus('working', 'Selecting papers', 85);
       const selectedEvaluations = evaluations
         .filter(e => e.include)
         .sort((a, b) => b.overallScore - a.overallScore)
@@ -442,6 +616,7 @@ export class ResearcherAgent extends BaseAgent {
         selectedSources: this.selectedSources,
         totalPapersFound: allPapers.length,
         totalPapersSelected: this.selectedSources.length,
+        triageStats,
       };
 
       return {
