@@ -4,6 +4,7 @@
 import { EventEmitter } from 'events';
 import { agentRegistry, type AgentContext, type AgentResult } from './agents/base-agent';
 import { OrchestratorAgent } from './agents/orchestrator-agent';
+import { saveSession, updateSessionStatus, appendSources, saveSynthesis } from './session-store';
 import type {
   ResearchSession,
   ResearchMode,
@@ -163,6 +164,20 @@ export class ResearchEngine extends EventEmitter {
 
     this.sessions.set(sessionId, session);
 
+    // Persist initial session to database
+    saveSession({
+      id: sessionId,
+      userId,
+      topic,
+      mode,
+      config,
+      status: 'clarifying',
+      progress: 0,
+      clarifications: [],
+      perspectives: [],
+      sources: [],
+    }).catch(err => console.error('Failed to persist initial session:', err));
+
     return sessionId;
   }
 
@@ -239,6 +254,11 @@ export class ResearchEngine extends EventEmitter {
         progress: session.progress,
       });
 
+      // Persist status to database
+      updateSessionStatus(session.id, session.status, session.progress).catch(err =>
+        console.error('Failed to persist status:', err)
+      );
+
       if (!nextAgent) {
         // Workflow complete
         session.status = 'complete';
@@ -246,6 +266,11 @@ export class ResearchEngine extends EventEmitter {
           type: 'complete',
           session: this.getSessionData(session),
         });
+
+        // Save complete session to database
+        saveSession(this.getSessionData(session)).catch(err =>
+          console.error('Failed to persist completed session:', err)
+        );
         break;
       }
 
@@ -390,6 +415,11 @@ export class ResearchEngine extends EventEmitter {
               source,
             });
           }
+
+          // Persist sources to database
+          appendSources(session.id, sources).catch(err =>
+            console.error('Failed to persist sources:', err)
+          );
         }
         break;
 
@@ -401,6 +431,11 @@ export class ResearchEngine extends EventEmitter {
             type: 'synthesis_ready',
             synthesis: session.synthesis,
           });
+
+          // Persist synthesis to database
+          saveSynthesis(session.id, session.synthesis).catch(err =>
+            console.error('Failed to persist synthesis:', err)
+          );
         }
         break;
     }

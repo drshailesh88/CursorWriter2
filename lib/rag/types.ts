@@ -54,8 +54,8 @@ export const DEFAULT_RETRIEVAL_CONFIG: RetrievalConfig = {
   bm25Weight: 0.4,
   denseWeight: 0.6,
   rerankTopK: 10,
-  useMultiQuery: false, // Start simple, can enable later
-  useHyDE: false, // Start simple, can enable later
+  useMultiQuery: true, // Enable multi-query by default
+  useHyDE: false, // HyDE is opt-in (more expensive)
 };
 
 export interface Citation {

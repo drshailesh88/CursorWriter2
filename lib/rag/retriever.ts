@@ -12,6 +12,7 @@ import {
 import { buildBM25Index, bm25Search, applyAcademicBoosts } from './bm25';
 import { denseSearch, embedChunks } from './embeddings';
 import { cohereRerank, simpleRerank } from './reranker';
+import { generateMultiQueries, multiQuerySearch, hydeSearch } from './query-expansion';
 
 /**
  * Reciprocal Rank Fusion (RRF)
@@ -93,27 +94,46 @@ export async function hybridRetrieve(
     weights.push(cfg.bm25Weight);
   }
 
-  // 2. Dense Retrieval (if enabled and chunks have embeddings)
+  // 2. Dense Retrieval (with optional Multi-Query and HyDE enhancements)
   if (cfg.useDenseRetrieval) {
     // Ensure chunks have embeddings
     const { chunks: embeddedChunks, tokensUsed } = await embedChunks(chunks);
     embeddingTokens = tokensUsed;
 
-    const { results: denseResults, tokensUsed: queryTokens } = await denseSearch(
-      query,
-      embeddedChunks,
-      cfg.topK
-    );
-    embeddingTokens += queryTokens;
+    if (cfg.useMultiQuery) {
+      // Multi-Query: generate reformulations and search with each
+      const queries = await generateMultiQueries(query);
+      const mqResults = await multiQuerySearch(queries, embeddedChunks, cfg.topK);
+      rankedLists.push(mqResults);
+      weights.push(cfg.denseWeight);
+    } else if (cfg.useHyDE) {
+      // HyDE: use hypothetical document embedding for retrieval
+      const { results: hydeResults, tokensUsed: hydeTokens } = await hydeSearch(
+        query,
+        embeddedChunks,
+        cfg.topK
+      );
+      embeddingTokens += hydeTokens;
+      rankedLists.push(hydeResults);
+      weights.push(cfg.denseWeight);
+    } else {
+      // Standard dense retrieval
+      const { results: denseResults, tokensUsed: queryTokens } = await denseSearch(
+        query,
+        embeddedChunks,
+        cfg.topK
+      );
+      embeddingTokens += queryTokens;
 
-    const denseRetrievalResults: RetrievalResult[] = denseResults.map((r) => ({
-      chunk: r.chunk,
-      score: r.score,
-      source: 'dense' as const,
-    }));
+      const denseRetrievalResults: RetrievalResult[] = denseResults.map((r) => ({
+        chunk: r.chunk,
+        score: r.score,
+        source: 'dense' as const,
+      }));
 
-    rankedLists.push(denseRetrievalResults);
-    weights.push(cfg.denseWeight);
+      rankedLists.push(denseRetrievalResults);
+      weights.push(cfg.denseWeight);
+    }
   }
 
   // 3. RRF Fusion

@@ -2,6 +2,7 @@
 // Uses OpenAI text-embedding-3-small for cost-effective embeddings
 
 import { TextChunk } from './types';
+import { getSupabaseAdminClient } from '@/lib/supabase/admin';
 
 const EMBEDDING_MODEL = 'text-embedding-3-small';
 const EMBEDDING_DIMENSIONS = 1536;
@@ -186,4 +187,230 @@ export async function denseSearch(
     .slice(0, topK);
 
   return { results, tokensUsed };
+}
+
+// --- Persistent Vector Store ---
+
+interface StoredEmbedding {
+  id: string;
+  paperId: string;
+  chunkId: string;
+  chunkText: string;
+  chunkIndex: number;
+  section?: string;
+  pageNumber?: number;
+  paperTitle: string;
+  authors?: string;
+  year?: number;
+  embedding: number[];
+  similarity?: number;
+}
+
+/**
+ * Store chunk embeddings in Supabase pgvector
+ */
+export async function storeChunkEmbeddings(
+  chunks: TextChunk[]
+): Promise<{ stored: number; skipped: number }> {
+  const supabase = getSupabaseAdminClient();
+  let stored = 0;
+  let skipped = 0;
+
+  // Process in batches of 50 for Supabase limits
+  const BATCH_SIZE = 50;
+  for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
+    const batch = chunks.slice(i, i + BATCH_SIZE);
+    const rows = batch
+      .filter(c => c.embedding)
+      .map(chunk => ({
+        paper_id: chunk.paperId,
+        chunk_id: chunk.id,
+        chunk_text: chunk.text,
+        chunk_index: chunk.chunkIndex,
+        section: chunk.section || null,
+        page_number: chunk.pageNumber || null,
+        paper_title: chunk.paperTitle,
+        authors: chunk.authors || null,
+        year: chunk.year || null,
+        embedding: JSON.stringify(chunk.embedding),
+        model: 'text-embedding-3-small',
+      }));
+
+    if (rows.length === 0) continue;
+
+    const { error } = await supabase
+      .from('paper_embeddings')
+      .upsert(rows, { onConflict: 'chunk_id' });
+
+    if (error) {
+      console.error('Error storing embeddings:', error);
+      skipped += rows.length;
+    } else {
+      stored += rows.length;
+    }
+  }
+
+  return { stored, skipped };
+}
+
+/**
+ * Retrieve stored embeddings for specific papers
+ */
+export async function getStoredEmbeddings(
+  paperIds: string[]
+): Promise<TextChunk[]> {
+  const supabase = getSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .from('paper_embeddings')
+    .select('*')
+    .in('paper_id', paperIds);
+
+  if (error || !data) {
+    console.error('Error retrieving embeddings:', error);
+    return [];
+  }
+
+  return (data as Record<string, unknown>[]).map(row => ({
+    id: row.chunk_id as string,
+    paperId: row.paper_id as string,
+    paperTitle: row.paper_title as string,
+    authors: row.authors as string | undefined,
+    year: row.year as number | undefined,
+    text: row.chunk_text as string,
+    section: row.section as string | undefined,
+    pageNumber: row.page_number as number | undefined,
+    chunkIndex: row.chunk_index as number,
+    embedding: typeof row.embedding === 'string' ? JSON.parse(row.embedding) : row.embedding,
+  }));
+}
+
+/**
+ * Semantic similarity search using pgvector
+ */
+export async function vectorSearch(
+  query: string,
+  paperIds?: string[],
+  topK: number = 20,
+  threshold: number = 0.7
+): Promise<{ results: Array<{ chunk: TextChunk; score: number }>; tokensUsed: number }> {
+  const { embedding: queryEmbedding, tokensUsed } = await getEmbedding(query);
+  const supabase = getSupabaseAdminClient();
+
+  const { data, error } = await supabase
+    .rpc('match_paper_chunks', {
+      query_embedding: JSON.stringify(queryEmbedding),
+      match_threshold: threshold,
+      match_count: topK,
+      filter_paper_ids: paperIds || null,
+    });
+
+  if (error || !data) {
+    console.error('Vector search error:', error);
+    return { results: [], tokensUsed };
+  }
+
+  const results = (data as Record<string, unknown>[]).map(row => ({
+    chunk: {
+      id: row.chunk_id as string,
+      paperId: row.paper_id as string,
+      paperTitle: row.paper_title as string,
+      authors: row.authors as string | undefined,
+      year: row.year as number | undefined,
+      text: row.chunk_text as string,
+      section: row.section as string | undefined,
+      pageNumber: row.page_number as number | undefined,
+      chunkIndex: row.chunk_index as number,
+    } as TextChunk,
+    score: row.similarity as number,
+  }));
+
+  return { results, tokensUsed };
+}
+
+/**
+ * Check if embeddings exist for given papers
+ */
+export async function hasStoredEmbeddings(paperIds: string[]): Promise<Map<string, boolean>> {
+  const supabase = getSupabaseAdminClient();
+  const result = new Map<string, boolean>();
+
+  for (const paperId of paperIds) {
+    result.set(paperId, false);
+  }
+
+  const { data, error } = await supabase
+    .from('paper_embeddings')
+    .select('paper_id')
+    .in('paper_id', paperIds)
+    .limit(1);
+
+  if (!error && data) {
+    const foundIds = new Set((data as Record<string, unknown>[]).map(r => r.paper_id as string));
+    for (const id of foundIds) {
+      result.set(id, true);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Delete embeddings for a paper (e.g., when paper is re-processed)
+ */
+export async function deleteEmbeddings(paperId: string): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  await supabase
+    .from('paper_embeddings')
+    .delete()
+    .eq('paper_id', paperId);
+}
+
+/**
+ * Embed chunks with persistence - stores in pgvector after embedding
+ * This is the new preferred method that combines embedding + storage
+ */
+export async function embedAndStoreChunks(
+  chunks: TextChunk[]
+): Promise<{ chunks: TextChunk[]; tokensUsed: number; stored: number }> {
+  // First check which chunks already have embeddings stored
+  const paperIds = [...new Set(chunks.map(c => c.paperId))];
+  const storedChunks = await getStoredEmbeddings(paperIds);
+  const storedMap = new Map(storedChunks.map(c => [c.id, c]));
+
+  // Separate chunks into already-stored and needs-embedding
+  const needsEmbedding: TextChunk[] = [];
+  const alreadyEmbedded: TextChunk[] = [];
+
+  for (const chunk of chunks) {
+    const stored = storedMap.get(chunk.id);
+    if (stored && stored.embedding) {
+      alreadyEmbedded.push(stored);
+    } else {
+      needsEmbedding.push(chunk);
+    }
+  }
+
+  let tokensUsed = 0;
+
+  // Embed only chunks that don't have stored embeddings
+  if (needsEmbedding.length > 0) {
+    const result = await embedChunks(needsEmbedding);
+    tokensUsed = result.tokensUsed;
+
+    // Store the new embeddings
+    const storeResult = await storeChunkEmbeddings(result.chunks);
+
+    return {
+      chunks: [...alreadyEmbedded, ...result.chunks],
+      tokensUsed,
+      stored: storeResult.stored,
+    };
+  }
+
+  return {
+    chunks: alreadyEmbedded,
+    tokensUsed: 0,
+    stored: 0,
+  };
 }
